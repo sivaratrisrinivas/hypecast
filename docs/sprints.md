@@ -9,19 +9,19 @@ This document translates the project specifications into an actionable, exhausti
 **Demoable Outcome:** User can click "START" on a mobile view, see a mock URL/QR code, open it on a desktop view, and see mocked "Live" and "Generating Reel" states.
 
 ### Tasks:
-- [ ] **1.1 Setup Project Repository & Tooling**
-  - **Details:** Initialize Git, configure a `frontend` (Next.js 15, Tailwind, pnpm) and `backend` (FastAPI, Poetry/uv) directory structure according to `spec.md`. Add basic linting rules. 
+- [x] **1.1 Setup Project Repository & Tooling**
+  - **Details:** Initialize Git, configure a `frontend` (Next.js 15, Tailwind, pnpm) and `backend` (FastAPI, Poetry/uv) directory structure according to `spec.md`. Add basic linting rules.
   - **Validation:** CI pipeline or local script demonstrating `pnpm lint` and `pytest` pass with 0 errors.
-- [ ] **1.2 Define Shared Types & Mocks**
+- [x] **1.2 Define Shared Types & Mocks**
   - **Details:** Implement TypeScript interfaces (`Session`, `Reel`, `CommentaryEntry`) in `frontend/src/types/` and Python dataclasses in `backend/models/`. Create a mock server or static mock response file.
   - **Validation:** Unit tests validating proper typing (e.g., attempting to assign an invalid status to `SessionStatus` fails TS compiler / Python Pydantic validation).
-- [ ] **1.3 Implement `useDeviceRole` Hook**
+- [x] **1.3 Implement `useDeviceRole` Hook**
   - **Details:** Hook to determine if the user is on the "phone" (camera) or "laptop" (spectator) based on URL params or screen heuristics.
   - **Validation:** `vitest` unit tests verifying return values for different mocked `window.navigator.userAgent` inputs.
-- [ ] **1.4 Build `CameraView` Component Shell**
+- [x] **1.4 Build `CameraView` Component Shell**
   - **Details:** UI component showing an inactive camera box, and a big "START" button.
   - **Validation:** React Testing Library test asserting button presence and `onClick` mock invocation.
-- [ ] **1.5 Build `SpectatorView` Component Shell**
+- [x] **1.5 Build `SpectatorView` Component Shell**
   - **Details:** UI component showing an "Awaiting connection..." message and mock timer.
   - **Validation:** React Testing Library test asserting visual states based on different mocked `SessionStatus` props.
 

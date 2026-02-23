@@ -50,8 +50,10 @@ export function useDeviceRole(options?: DetectionOptions): UseDeviceRoleResult {
       }
     }
 
-    setRole(resolvedRole);
-    setIsLoading(false);
+    queueMicrotask(() => {
+      setRole(resolvedRole);
+      setIsLoading(false);
+    });
   }, [options?.initialRoleParam]);
 
   return { role, isLoading };
