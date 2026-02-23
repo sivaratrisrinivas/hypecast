@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from .commentary import CommentaryEntry
@@ -20,7 +20,7 @@ class GameSession:
     stream_call_id: str
     stream_call_type: str = "default"
     status: SessionStatus = SessionStatus.WAITING
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     ended_at: datetime | None = None
     commentary_log: list[CommentaryEntry] = field(default_factory=list)
     highlights: list[Highlight] = field(default_factory=list)

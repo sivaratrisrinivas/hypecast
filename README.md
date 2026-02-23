@@ -36,7 +36,7 @@ uv sync
 uv run uvicorn app.main:app --reload
 ```
 
-The API is at [http://localhost:8000](http://localhost:8000). Check [http://localhost:8000/health](http://localhost:8000/health) to confirm it’s up. Right now the backend only exposes this health check; session and reel APIs come later.
+The API is at [http://localhost:8000](http://localhost:8000). Check [http://localhost:8000/health](http://localhost:8000/health) to confirm it’s up. **POST /api/sessions** creates a game session (in-memory store; returns `session_id`, `stream_call_id`, `join_url`; Stream token is placeholder until 2.2). Session read/end and reel APIs come in later sprints.
 
 **Check code quality**
 
@@ -55,9 +55,9 @@ cd backend && uv run pytest -v && uv run ruff check .
 | Part | Role |
 |------|------|
 | **frontend/** | Web app: landing, camera view (phone), spectator view (laptop). Next.js, React, Tailwind, TypeScript. |
-| **backend/** | Server that will create sessions, issue tokens, run the AI pipeline, and build reels. Right now: FastAPI app with a health route; `app/main.py` for routes, `models/` for data shapes, `tests/` for pytest. |
+| **backend/** | Server that creates sessions, will issue tokens (2.2), run the AI pipeline, and build reels. FastAPI app in `app/main.py`; session API in `routes/sessions.py`, in-memory store in `services/store.py`; `models/` for data shapes, `tests/` for pytest. |
 | **docs/spec.md** | Full design: data shapes, APIs, how video and commentary flow. |
-| **docs/sprints.md** | Task plan: Sprint 1 done (foundation and UI shells); Sprints 2–5 planned (streaming, AI, reels, polish). |
+| **docs/sprints.md** | Task plan: Sprint 1 done (foundation and UI shells); Sprint 2 started (2.1 session store & API done); Sprints 2–5 otherwise planned (streaming, AI, reels, polish). |
 
 ---
 

@@ -488,9 +488,9 @@ The backend runs `uv run agent.py serve`. The Vision Agents **Runner** registers
 
 ### 5.1 App-specific REST API (FastAPI)
 
-Base URL: `https://<cloud-run-url>`. App routes can be mounted on the Runner’s FastAPI app via `runner.fast_api` or a custom `ServeOptions(fast_api=app)`.
+Base URL: `https://<cloud-run-url>`. App routes can be mounted on the Runner’s FastAPI app via `runner.fast_api` or a custom `ServeOptions(fast_api=app)`. Implemented: `backend/routes/sessions.py`, store in `backend/services/store.py` (task 2.1).
 
-#### `POST /api/session` (or equivalent — create session + token)
+#### `POST /api/sessions` (create session; token in 2.2)
 
 Creates a logical game session, generates a Stream **call_id** (e.g. `pickup-{nanoid}`), and returns a **Stream user token** so the frontend can create/join the call. Frontend then POSTs `call_type` + `call_id` to Runner’s **POST /sessions** to spawn the agent.
 
