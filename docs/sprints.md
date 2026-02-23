@@ -43,7 +43,7 @@ This document translates the project specifications into an actionable, exhausti
 - [x] **2.1 Backend: Create Session Store & API Shell**
   - **Details:** Implement the in-memory Python session dict. Create a custom `FastAPI` instance and add our app routes (`POST /api/sessions`), which will later be passed to the Vision Agents `Runner` via `ServeOptions(fast_api=app)`.
   - **Validation:** `pytest` unit test asserting `sessions` dict is updated and `SessionStatus` initializes to `WAITING`.
-- [ ] **2.2 Backend: Stream Server-Side JWT Integration**
+- [x] **2.2 Backend: Stream Server-Side JWT Integration**
   - **Details:** Create `GET /api/sessions/{id}/token` to generate Stream application tokens for a given user role.
   - **Validation:** Integration test using a mock/sandbox Stream key to verify token decodes back to correct user ID.
 - [ ] **2.3 Frontend: Implement `useSession` Hook**
