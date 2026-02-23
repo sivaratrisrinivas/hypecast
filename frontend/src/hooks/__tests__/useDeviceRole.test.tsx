@@ -1,4 +1,4 @@
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import { useDeviceRole } from "../useDeviceRole";
 import type { DeviceRole } from "@/types/session";
 
@@ -28,52 +28,51 @@ describe("useDeviceRole", () => {
     window.location = originalLocation;
   });
 
-  it("returns spectator on wide screens by default", () => {
+  it("returns spectator on wide screens by default", async () => {
     setViewportWidth(1200);
 
     const { result } = renderHook(() => useDeviceRole());
 
-    // Run useEffect
-    act(() => {});
-
-    expect(result.current.isLoading).toBe(false);
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
     expect(result.current.role).toBe< DeviceRole >("spectator");
   });
 
-  it("returns camera on narrow screens by default", () => {
+  it("returns camera on narrow screens by default", async () => {
     setViewportWidth(375);
 
     const { result } = renderHook(() => useDeviceRole());
 
-    act(() => {});
-
-    expect(result.current.isLoading).toBe(false);
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
     expect(result.current.role).toBe< DeviceRole >("camera");
   });
 
-  it("prefers explicit role=camera from URL", () => {
+  it("prefers explicit role=camera from URL", async () => {
     // @ts-expect-error - jsdom override
     window.location = new URL("https://example.com/game/abc?role=camera") as unknown as Location;
     setViewportWidth(1200); // would normally be spectator
 
     const { result } = renderHook(() => useDeviceRole());
 
-    act(() => {});
-
-    expect(result.current.isLoading).toBe(false);
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
     expect(result.current.role).toBe("camera");
   });
 
-  it("prefers explicit role=spectator from URL", () => {
+  it("prefers explicit role=spectator from URL", async () => {
     // @ts-expect-error - jsdom override
     window.location = new URL("https://example.com/game/abc?role=spectator") as unknown as Location;
     setViewportWidth(375); // would normally be camera
 
     const { result } = renderHook(() => useDeviceRole());
 
-    act(() => {});
-
-    expect(result.current.isLoading).toBe(false);
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
     expect(result.current.role).toBe("spectator");
   });
 });

@@ -22,4 +22,14 @@ describe("CameraView", () => {
 
     expect(onStart).toHaveBeenCalledTimes(1);
   });
+
+  it("shows mock join URL and QR when joinUrl is set", () => {
+    render(
+      <CameraView onStart={vi.fn()} joinUrl="https://example.com/game/abc123" />
+    );
+
+    expect(screen.queryByRole("button", { name: /start/i })).not.toBeInTheDocument();
+    expect(screen.getByText("https://example.com/game/abc123")).toBeInTheDocument();
+    expect(screen.getByText(/open this link on your laptop/i)).toBeInTheDocument();
+  });
 });

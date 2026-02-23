@@ -1,5 +1,7 @@
 from datetime import datetime
 
+import pytest
+
 from models import (
     ENERGY_THRESHOLD,
     CommentaryEntry,
@@ -7,6 +9,13 @@ from models import (
     Highlight,
     SessionStatus,
 )
+
+
+def test_session_status_rejects_invalid() -> None:
+    with pytest.raises(ValueError):
+        SessionStatus("invalid")
+    with pytest.raises(ValueError):
+        SessionStatus("pending")
 
 
 def test_game_session_defaults() -> None:

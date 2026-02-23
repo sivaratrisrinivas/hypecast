@@ -1,6 +1,18 @@
 export type SessionStatus = "waiting" | "live" | "processing" | "completed" | "error";
 export type DeviceRole = "camera" | "spectator";
 
+export const SESSION_STATUSES: readonly SessionStatus[] = [
+  "waiting",
+  "live",
+  "processing",
+  "completed",
+  "error",
+] as const;
+
+export function isSessionStatus(s: string): s is SessionStatus {
+  return (SESSION_STATUSES as readonly string[]).includes(s);
+}
+
 export interface Session {
   id: string;                 // nanoid, e.g. "abc123"
   streamCallId: string;       // Stream call ID bound to this session

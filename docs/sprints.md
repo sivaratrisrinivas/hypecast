@@ -25,6 +25,14 @@ This document translates the project specifications into an actionable, exhausti
   - **Details:** UI component showing an "Awaiting connection..." message and mock timer.
   - **Validation:** React Testing Library test asserting visual states based on different mocked `SessionStatus` props.
 
+**How to verify Sprint 1**
+
+1. **Automated:** From repo root run `cd frontend && pnpm lint && pnpm test` and `cd backend && uv run pytest -v`. Both should pass with 0 errors.
+2. **Demo (manual):** Start the app (`cd frontend && pnpm dev`).  
+   - **Camera:** Open `http://localhost:3000/?role=camera` → tap START → you should see a mock join URL and QR code.  
+   - **Spectator:** Open `http://localhost:3000/?role=spectator` → "Awaiting connection...".  
+   - **Mock Live / Generating Reel:** Open `http://localhost:3000/?role=spectator&status=live` for "Live", or `&status=processing` for "Generating Reel".
+
 ---
 
 ## 📡 Sprint 2: WebRTC Plumbing & Backend State
