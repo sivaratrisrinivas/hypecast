@@ -44,8 +44,8 @@ The API is at [http://localhost:8000](http://localhost:8000). Check [http://loca
 # Frontend: lint and tests
 cd frontend && pnpm lint && pnpm test
 
-# Backend: tests
-cd backend && uv run pytest -v
+# Backend: tests and lint
+cd backend && uv run pytest -v && uv run ruff check .
 ```
 
 ---
@@ -55,11 +55,9 @@ cd backend && uv run pytest -v
 | Part | Role |
 |------|------|
 | **frontend/** | Web app: landing, camera view (phone), spectator view (laptop). Next.js, React, Tailwind, TypeScript. |
-| **backend/** | Server that will create sessions, issue tokens, run the AI pipeline, and build reels. Right now: FastAPI app with a health route. |
+| **backend/** | Server that will create sessions, issue tokens, run the AI pipeline, and build reels. Right now: FastAPI app with a health route; `app/main.py` for routes, `models/` for data shapes, `tests/` for pytest. |
 | **docs/spec.md** | Full design: data shapes, APIs, how video and commentary flow. |
 | **docs/sprints.md** | Task plan: Sprint 1 done (foundation and UI shells); Sprints 2–5 planned (streaming, AI, reels, polish). |
-
-For more on the backend, see [backend/README.md](backend/README.md).
 
 ---
 
