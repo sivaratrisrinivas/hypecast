@@ -659,7 +659,7 @@ Lifecycle rule: delete objects older than 48 hours.
 | **Device detection** | `useDeviceRole` returns `camera` when camera available, `spectator` otherwise | `frontend/src/hooks/__tests__/`      |
 | **Session hook**     | `useSession` state machine: waiting → live → processing → completed | `frontend/src/hooks/__tests__/`      |
 | **API client**       | `api.ts` fetch wrappers construct correct URLs and handle errors     | `frontend/src/lib/__tests__/`        |
-| **Components**       | CameraView renders START button, SpectatorView shows waiting state   | `frontend/src/components/__tests__/` |
+| **Components**       | CameraView: START button, join/create + camera.enable; SpectatorView: waiting state, join as subscriber, ParticipantView when remote tracks exist | `frontend/src/components/__tests__/` |
 
 **Mocking strategy:**
 - Mock `@stream-io/video-react-sdk` — don't create real WebRTC connections.

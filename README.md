@@ -57,7 +57,7 @@ cd backend && uv run pytest -v && uv run ruff check .
 | **frontend/** | Web app: landing, camera view (phone), spectator view (laptop). Next.js, React, Tailwind, TypeScript. |
 | **backend/** | Server that creates sessions, issues Stream tokens, and exposes session polling. FastAPI app in `app/main.py`; session API in `routes/sessions.py` (POST/GET session, GET token), in-memory store in `services/store.py`; `models/` for data shapes, `tests/` for pytest. |
 | **docs/spec.md** | Full design: data shapes, APIs, how video and commentary flow. |
-| **docs/sprints.md** | Task plan: Sprint 1 done; Sprint 2 in progress (2.1–2.4 done: session store, token API, useSession hook, Stream SDK broadcaster in CameraView); Sprints 2–5 otherwise planned (SpectatorView Stream subscriber, AI, reels, polish). |
+| **docs/sprints.md** | Task plan: Sprints 1 and 2 done (session store, token API, useSession hook, Stream SDK broadcaster in CameraView, SpectatorView Stream subscriber); Sprints 3–5 planned (Vision Agent, commentary, reels, polish). |
 
 ---
 
@@ -66,6 +66,8 @@ cd backend && uv run pytest -v && uv run ruff check .
 - **Session limits (planned):** One game at a time, up to 5 minutes; highlight reel about 30–60 seconds, 3–5 clips; share link expires in 48 hours.
 - **No login:** No accounts. You open the link and go.
 - **Same URL for both devices:** One link works on phone and laptop; the app picks camera vs spectator from screen size or the `role` query param.
+
+**Console messages (dev):** You may see `[video manager]: Setting direction is not supported on this device` — from Stream SDK on some browsers; safe to ignore. `Unable to add filesystem: <illegal path>` is from the browser or an extension (e.g. DevTools), not the app.
 
 ---
 
