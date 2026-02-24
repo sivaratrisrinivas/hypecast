@@ -53,7 +53,7 @@ This document translates the project specifications into an actionable, exhausti
   - **Details:** Use `@stream-io/video-react-sdk` in `CameraView` to initialize video/audio tracks and join `stream_call_id` as publisher.
   - **Validation:** Component test passing a `MockStreamVideoClient`, asserting `.join({ create: true })` and `.camera.enable()` are called.
 - [x] **2.5 Frontend: Stream SDK Subscriber Integration**
-  - **Details:** Implement `SpectatorView` joining the call and rendering the Stream video/audio player.
+  - **Details:** Implement `SpectatorView` joining the call and rendering the Stream video/audio player. Call is created inside the effect (one join per Call instance) to satisfy SDK "call.join() shall be called only once".
   - **Validation:** Component test asserting the Stream `ParticipantView` is rendered when remote tracks exist.
 
 **How to verify Sprint 2**

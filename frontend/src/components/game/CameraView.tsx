@@ -9,6 +9,19 @@ import {
 
 const CALL_TYPE = "default";
 
+/** Request and release media so device list is populated before Stream SDK join (avoids MicrophoneManager .find on undefined). */
+async function ensureDeviceListPopulated(): Promise<void> {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: true,
+    });
+    stream.getTracks().forEach((t) => t.stop());
+  } catch {
+    // Permission denied or no devices; continue anyway
+  }
+}
+
 export type CameraViewProps = {
   onStart: () => void;
   /** When set, show join URL and QR (after session created). */
@@ -43,14 +56,20 @@ export function CameraView({
       setIsJoining(true);
       setJoinError(null);
       try {
-        await call.camera.enable();
-        await call.microphone.enable();
+        await ensureDeviceListPopulated();
         await call.join({ create: true });
         if (cancelled) {
           await call.leave();
           return;
         }
         leaveRef.current = () => call.leave();
+        await call.camera.enable().catch((e) => {
+          console.warn("[CameraView] camera.enable failed:", e);
+        });
+        if (cancelled) return;
+        await call.microphone.enable().catch((e) => {
+          console.warn("[CameraView] microphone.enable failed:", e);
+        });
       } catch (err) {
         if (!cancelled) {
           setJoinError(err instanceof Error ? err.message : "Failed to join");

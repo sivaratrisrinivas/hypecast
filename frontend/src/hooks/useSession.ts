@@ -5,9 +5,9 @@ import type {
   SessionCreateResponse,
   SessionStatus,
   SessionStatusResponse,
-} from "@/types/session";
+} from "@/src/types/session";
 
-const POLL_INTERVAL_MS = 2000;
+const POLL_INTERVAL_MS = 5000;
 
 function getApiBase(): string {
   if (typeof window === "undefined") return "";
@@ -101,7 +101,7 @@ export function useSession(): UseSessionResult {
         }
         const body = (await res.json()) as Record<string, unknown>;
         const statusPayload = mapStatusResponse(body);
-        setSession((prev) =>
+        setSession((prev: SessionState | null) =>
           prev
             ? { ...prev, ...statusPayload }
             : null

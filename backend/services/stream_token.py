@@ -1,6 +1,8 @@
 """Generate Stream Video SDK user tokens (JWT) for camera/spectator roles."""
 
-from getstream import Stream
+import time
+
+import jwt
 
 
 def create_stream_token(
@@ -9,6 +11,18 @@ def create_stream_token(
     user_id: str,
     expiration_seconds: int = 3600,
 ) -> str:
-    """Create a Stream user JWT for the given user_id."""
-    client = Stream(api_key=api_key, api_secret=api_secret)
-    return client.create_token(user_id, expiration=expiration_seconds)
+    """Create a Stream user JWT for the given user_id.
+    Sets iat 60s in the past to avoid AuthErrorTokenUsedBeforeIssuedAt when
+    server or Stream clocks are slightly out of sync.
+    """
+    now = int(time.time())
+    payload = {
+        "user_id": user_id,
+        "iat": now - 60,
+        "exp": now + expiration_seconds,
+    }
+    return jwt.encode(
+        payload,
+        api_secret,
+        algorithm="HS256",
+    )
