@@ -13,6 +13,7 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
+    "@stream-io/video-react-sdk": "^1.32.4",
     "next": "16.1.6",
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",

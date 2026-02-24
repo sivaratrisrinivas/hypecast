@@ -36,7 +36,7 @@ uv sync
 uv run uvicorn app.main:app --reload
 ```
 
-The API is at [http://localhost:8000](http://localhost:8000). Check [http://localhost:8000/health](http://localhost:8000/health) to confirm it’s up. **POST /api/sessions** creates a game session (in-memory store; returns `session_id`, `stream_call_id`, `join_url`, `stream_token`). **GET /api/sessions/{id}** returns session status for polling (WAITING → LIVE, etc.). **GET /api/sessions/{id}/token?role=...** issues Stream tokens. Session end and reel APIs come in later sprints.
+The API is at [http://localhost:8000](http://localhost:8000). Check [http://localhost:8000/health](http://localhost:8000/health) to confirm it’s up. **CORS** is enabled for `localhost:3000` / `127.0.0.1:3000` so the frontend can call the API. **POST /api/sessions** creates a game session (in-memory store; returns `session_id`, `stream_call_id`, `join_url`, `stream_token`). **GET /api/sessions/{id}** returns session status for polling (WAITING → LIVE, etc.). **GET /api/sessions/{id}/token?role=...** issues Stream tokens. Session end and reel APIs come in later sprints.
 
 **Check code quality**
 
@@ -57,7 +57,7 @@ cd backend && uv run pytest -v && uv run ruff check .
 | **frontend/** | Web app: landing, camera view (phone), spectator view (laptop). Next.js, React, Tailwind, TypeScript. |
 | **backend/** | Server that creates sessions, issues Stream tokens, and exposes session polling. FastAPI app in `app/main.py`; session API in `routes/sessions.py` (POST/GET session, GET token), in-memory store in `services/store.py`; `models/` for data shapes, `tests/` for pytest. |
 | **docs/spec.md** | Full design: data shapes, APIs, how video and commentary flow. |
-| **docs/sprints.md** | Task plan: Sprint 1 done; Sprint 2 in progress (2.1–2.3 done: session store, token API, useSession hook); Sprints 2–5 otherwise planned (Stream SDK, AI, reels, polish). |
+| **docs/sprints.md** | Task plan: Sprint 1 done; Sprint 2 in progress (2.1–2.4 done: session store, token API, useSession hook, Stream SDK broadcaster in CameraView); Sprints 2–5 otherwise planned (SpectatorView Stream subscriber, AI, reels, polish). |
 
 ---
 

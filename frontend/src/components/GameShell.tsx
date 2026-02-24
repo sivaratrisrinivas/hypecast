@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo } from "react";
+import { StreamVideo, StreamVideoClient } from "@stream-io/video-react-sdk";
 import { useDeviceRole } from "@/src/hooks/useDeviceRole";
+import { useSession } from "@/src/hooks/useSession";
 import { CameraView } from "@/src/components/game/CameraView";
 import { SpectatorView } from "@/src/components/game/SpectatorView";
-import { MOCK_SESSION_ID } from "@/src/mocks/sessionMocks";
 import { isSessionStatus, type SessionStatus } from "@/src/types/session";
 
 function getSpectatorStatusFromUrl(): SessionStatus {
@@ -13,9 +14,20 @@ function getSpectatorStatusFromUrl(): SessionStatus {
   return isSessionStatus(p ?? "") ? p : "waiting";
 }
 
+const STREAM_API_KEY = process.env.NEXT_PUBLIC_STREAM_API_KEY ?? "";
+
 export function GameShell() {
   const { role, isLoading } = useDeviceRole();
-  const [cameraJoinUrl, setCameraJoinUrl] = useState<string | null>(null);
+  const { session, createSession, error: sessionError, isCreating } = useSession();
+
+  const streamClient = useMemo(() => {
+    if (!session || typeof window === "undefined" || !STREAM_API_KEY) return null;
+    return new StreamVideoClient({
+      apiKey: STREAM_API_KEY,
+      user: { id: `camera-${session.sessionId}` },
+      token: session.streamToken,
+    });
+  }, [session]);
 
   if (isLoading) {
     return (
@@ -26,16 +38,45 @@ export function GameShell() {
   }
 
   if (role === "camera") {
-    return (
+    const joinUrl = session
+      ? `${typeof window !== "undefined" ? window.location.origin : ""}${session.joinUrl}`
+      : null;
+
+    const cameraView = (
       <CameraView
-        onStart={() => {
-          // Sprint 1 demo: show mock join URL + QR. Sprint 2 will create real session.
-          const origin =
-            typeof window !== "undefined" ? window.location.origin : "";
-          setCameraJoinUrl(`${origin}/game/${MOCK_SESSION_ID}`);
-        }}
-        joinUrl={cameraJoinUrl}
+        onStart={createSession}
+        joinUrl={joinUrl}
+        streamCallId={session?.streamCallId ?? null}
       />
+    );
+
+    if (streamClient) {
+      return (
+        <StreamVideo client={streamClient}>
+          {sessionError && (
+            <div className="fixed left-0 right-0 top-0 bg-red-900/90 px-4 py-2 text-center text-sm text-white">
+              {sessionError}
+            </div>
+          )}
+          {cameraView}
+        </StreamVideo>
+      );
+    }
+
+    return (
+      <>
+        {sessionError && (
+          <div className="fixed left-0 right-0 top-0 bg-red-900/90 px-4 py-2 text-center text-sm text-white">
+            {sessionError}
+          </div>
+        )}
+        {isCreating && (
+          <div className="fixed left-0 right-0 top-0 bg-black/80 px-4 py-2 text-center text-sm text-white">
+            Creating session...
+          </div>
+        )}
+        {cameraView}
+      </>
     );
   }
 

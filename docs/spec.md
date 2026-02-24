@@ -598,6 +598,8 @@ await call.join();
 
 ### 5.4 Frontend → Backend Communication
 
+The backend must allow **CORS** from the frontend origin (e.g. `http://localhost:3000`, `http://127.0.0.1:3000`) so browser requests to the API succeed. The FastAPI app uses `CORSMiddleware` with these origins in development.
+
 | Action                    | Method | Endpoint                          | Trigger                       |
 | ------------------------- | ------ | --------------------------------- | ----------------------------- |
 | Start new session         | POST   | `/api/sessions`                   | User taps START               |

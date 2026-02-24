@@ -49,17 +49,18 @@ This document translates the project specifications into an actionable, exhausti
 - [x] **2.3 Frontend: Implement `useSession` Hook**
   - **Details:** Data fetching hook wrapping session creation and polling, updating local React state from `WAITING` -> `LIVE`.
   - **Validation:** `vitest` mocking `fetch` to return session state progression, asserting hook state updates accordingly.
-- [ ] **2.4 Frontend: Stream SDK Broadcaster Integration**
+- [x] **2.4 Frontend: Stream SDK Broadcaster Integration**
   - **Details:** Use `@stream-io/video-react-sdk` in `CameraView` to initialize video/audio tracks and join `stream_call_id` as publisher.
   - **Validation:** Component test passing a `MockStreamVideoClient`, asserting `.join({ create: true })` and `.camera.enable()` are called.
 - [ ] **2.5 Frontend: Stream SDK Subscriber Integration**
   - **Details:** Implement `SpectatorView` joining the call and rendering the Stream video/audio player.
   - **Validation:** Component test asserting the Stream `ParticipantView` is rendered when remote tracks exist.
 
-**How to verify Sprint 2 (through 2.3)**
+**How to verify Sprint 2 (through 2.4)**
 
 1. **Backend:** `cd backend && uv run pytest tests/test_sessions_api.py -v` — 6 tests (create, GET token, GET session for polling).
-2. **Frontend:** `cd frontend && pnpm lint && pnpm test -- --run` — includes `useSession` hook tests (create + polling state progression).
+2. **Frontend:** `cd frontend && pnpm lint && pnpm test -- --run` — includes `useSession` hook tests and CameraView Stream broadcaster test (join with `create: true`, `camera.enable()`).
+3. **UI (manual):** Backend and frontend running; open `http://localhost:3000/?role=camera` → tap START → session created via API; join URL and QR shown; with Stream credentials, camera joins call as publisher (Streaming). Backend must allow CORS from frontend origin (e.g. localhost:3000).
 
 ---
 
