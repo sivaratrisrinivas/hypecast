@@ -104,3 +104,30 @@ async def test_get_token_integration_decodes_to_correct_user_id() -> None:
         stream_token, TEST_JWT_SECRET, algorithms=["HS256"]
     )
     assert decoded["user_id"] == f"spectator-{session_id}"
+
+
+# --- GET /api/sessions/{id} (polling for task 2.3) ---
+
+
+@pytest.mark.anyio
+async def test_get_session_returns_404_when_missing() -> None:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/sessions/nonexistent")
+    assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_get_session_returns_status_for_polling() -> None:
+    """GET /api/sessions/{id} returns status (WAITING), reel_id, reel_url for polling."""
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post("/api/sessions")
+        assert create_resp.status_code == 201
+        session_id = create_resp.json()["session_id"]
+        response = await client.get(f"/api/sessions/{session_id}")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "waiting"
+    assert body.get("reel_id") is None
+    assert body.get("reel_url") is None

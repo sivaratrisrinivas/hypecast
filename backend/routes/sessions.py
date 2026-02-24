@@ -6,7 +6,7 @@ import secrets
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from models.session import GameSession
+from models.session import GameSession, SessionStatus
 from services.store import sessions
 from services.stream_token import create_stream_token
 
@@ -27,6 +27,14 @@ class SessionTokenResponse(BaseModel):
     stream_token: str
     user_id: str
     call_id: str
+
+
+class SessionReadResponse(BaseModel):
+    """Session status for polling. GET /api/sessions/{id}."""
+
+    status: SessionStatus
+    reel_id: str | None = None
+    reel_url: str | None = None
 
 
 def _get_stream_credentials() -> tuple[str, str]:
@@ -90,4 +98,21 @@ def get_session_token(
         stream_token=stream_token,
         user_id=user_id,
         call_id=session.stream_call_id,
+    )
+
+
+@router.get(
+    "/sessions/{session_id}",
+    response_model=SessionReadResponse,
+    status_code=200,
+)
+def get_session(session_id: str) -> SessionReadResponse:
+    """Get session status for polling. Used by frontend to track WAITING -> LIVE -> etc."""
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session = sessions[session_id]
+    return SessionReadResponse(
+        status=session.status,
+        reel_id=session.reel_id,
+        reel_url=session.reel_url,
     )

@@ -46,7 +46,7 @@ This document translates the project specifications into an actionable, exhausti
 - [x] **2.2 Backend: Stream Server-Side JWT Integration**
   - **Details:** Create `GET /api/sessions/{id}/token` to generate Stream application tokens for a given user role.
   - **Validation:** Integration test using a mock/sandbox Stream key to verify token decodes back to correct user ID.
-- [ ] **2.3 Frontend: Implement `useSession` Hook**
+- [x] **2.3 Frontend: Implement `useSession` Hook**
   - **Details:** Data fetching hook wrapping session creation and polling, updating local React state from `WAITING` -> `LIVE`.
   - **Validation:** `vitest` mocking `fetch` to return session state progression, asserting hook state updates accordingly.
 - [ ] **2.4 Frontend: Stream SDK Broadcaster Integration**
@@ -55,6 +55,11 @@ This document translates the project specifications into an actionable, exhausti
 - [ ] **2.5 Frontend: Stream SDK Subscriber Integration**
   - **Details:** Implement `SpectatorView` joining the call and rendering the Stream video/audio player.
   - **Validation:** Component test asserting the Stream `ParticipantView` is rendered when remote tracks exist.
+
+**How to verify Sprint 2 (through 2.3)**
+
+1. **Backend:** `cd backend && uv run pytest tests/test_sessions_api.py -v` — 6 tests (create, GET token, GET session for polling).
+2. **Frontend:** `cd frontend && pnpm lint && pnpm test -- --run` — includes `useSession` hook tests (create + polling state progression).
 
 ---
 

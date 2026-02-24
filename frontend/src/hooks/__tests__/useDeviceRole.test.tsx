@@ -1,4 +1,4 @@
-import { renderHook, act, waitFor } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { useDeviceRole } from "../useDeviceRole";
 import type { DeviceRole } from "@/types/session";
 

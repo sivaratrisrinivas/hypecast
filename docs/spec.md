@@ -506,20 +506,18 @@ Creates a logical game session, generates a Stream **call_id** (e.g. `pickup-{na
 
 #### `GET /api/sessions/{session_id}`
 
-Get session status (and reel URL when ready). Used for polling. Can extend Runner’s GET `/sessions/{session_id}` or implement separately with app session store.
+Get session status (and reel URL when ready). Used for polling (e.g. frontend `useSession` hook). Implemented in app session store (task 2.3).
 
 **Response `200`:**
 ```json
 {
-  "session_id": "abc123",
-  "status": "completed",
-  "duration": 245,
-  "reel_id": "reel_xyz",
-  "reel_url": "https://storage.googleapis.com/...",
-  "created_at": "2026-02-25T14:30:00Z",
-  "ended_at": "2026-02-25T14:34:05Z"
+  "status": "waiting",
+  "reel_id": null,
+  "reel_url": null
 }
 ```
+
+Status values: `waiting` | `live` | `processing` | `completed` | `error`. Optional fields (e.g. `duration`, `created_at`, `ended_at`) may be added later.
 
 **Response `404`:** `{"detail": "Session not found"}`
 
