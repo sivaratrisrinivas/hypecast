@@ -28,15 +28,15 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000). Use `?role=camera` for the phone view (camera placeholder and START button) or `?role=spectator` for the laptop view (e.g. “Awaiting connection…”).
 
-**Run the API (backend)**
+**Run the API (backend + Vision Agent runner)**
 
 ```bash
 cd backend
 uv sync
-uv run uvicorn app.main:app --reload
+uv run agent.py serve --host 0.0.0.0 --port 8000
 ```
 
-The API is at [http://localhost:8000](http://localhost:8000). Check [http://localhost:8000/health](http://localhost:8000/health) to confirm it’s up. **CORS** is enabled for `localhost:3000` / `127.0.0.1:3000` so the frontend can call the API. **POST /api/sessions** creates a game session (in-memory store; returns `session_id`, `stream_call_id`, `join_url`, `stream_token`). **GET /api/sessions/{id}** returns session status for polling (WAITING → LIVE, etc.). **GET /api/sessions/{id}/token?role=...** issues Stream tokens. Session end and reel APIs come in later sprints.
+The API and Vision Agents runner are at [http://localhost:8000](http://localhost:8000). Check [http://localhost:8000/health](http://localhost:8000/health) to confirm it’s up. **CORS** is enabled for `localhost:3000` / `127.0.0.1:3000` so the frontend can call the API. **POST /api/sessions** creates a game session (in-memory store; returns `session_id`, `stream_call_id`, `join_url`, `stream_token`). **GET /api/sessions/{id}** returns session status for polling (WAITING → LIVE, etc.). **GET /api/sessions/{id}/token?role=...** issues Stream tokens. Session end and reel APIs come in later sprints.
 
 **Check code quality**
 
@@ -57,7 +57,7 @@ cd backend && uv run pytest -v && uv run ruff check .
 | **frontend/** | Web app: landing, camera view (phone), spectator view (laptop). Next.js, React, Tailwind, TypeScript. |
 | **backend/** | Server that creates sessions, issues Stream tokens, and exposes session polling. FastAPI app in `app/main.py`; session API in `routes/sessions.py` (POST/GET session, GET token), in-memory store in `services/store.py`; `models/` for data shapes, `tests/` for pytest. |
 | **docs/spec.md** | Full design: data shapes, APIs, how video and commentary flow. |
-| **docs/sprints.md** | Task plan: Sprints 1 and 2 done (session store, token API, useSession hook, Stream SDK broadcaster in CameraView, SpectatorView Stream subscriber); Sprints 3–5 planned (Vision Agent, commentary, reels, polish). |
+| **docs/sprints.md** | Task plan: Sprints 1 and 2 done (session store, token API, useSession hook, Stream SDK broadcaster in CameraView, SpectatorView Stream subscriber); Sprint 3.1 wired the Vision Agents runner; Sprints 3.2–5 planned (agent join, commentary, reels, polish). |
 
 ---
 

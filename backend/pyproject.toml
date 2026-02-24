@@ -10,6 +10,7 @@ dependencies = [
     "getstream>=2.0.0",
     "python-dotenv>=1.0.0",
     "pyjwt>=2.8.0",
+    "vision-agents>=0.2.0",
 ]
 
 [project.optional-dependencies]

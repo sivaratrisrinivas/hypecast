@@ -465,7 +465,7 @@ After END tapped:
 
 ### 5.0 Vision Agents Runner (built-in API)
 
-The backend runs `uv run agent.py serve`. The Vision Agents **Runner** registers these endpoints by default (see [Running Agents as a Server](https://visionagents.ai/guides/running)):
+The backend runs `uv run agent.py serve`. The Vision Agents **Runner** is configured in `backend/agent.py` using `AgentLauncher` with `max_session_duration_seconds=300`, `max_sessions_per_call=1`, and `max_concurrent_sessions=1`, and is mounted on the existing FastAPI app via `ServeOptions(fast_api=app)`. In this configuration, the Runner registers these endpoints by default (see [Running Agents as a Server](https://visionagents.ai/guides/running)):
 
 | Method | Endpoint | Purpose |
 | ------ | -------- | -------- |
