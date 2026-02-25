@@ -98,9 +98,9 @@ This document translates the project specifications into an actionable, exhausti
 - [x] **4.1 RF-DETR Integration (Local)**
   - **Details:** Add an RF-DETR-based `VideoProcessor` to the agent pipeline (built on `rfdetr`) to detect players/balls at 5fps. Expose detection metadata via an internal hub (and optionally WebSocket) for later UI overlays.
   - **Validation:** Unit test providing a static sample frame (via a fake model) asserting the processor emits JSON bounding boxes for `person`/`sports ball`.
-- [ ] **4.2 Gemini Realtime Integration**
-  - **Details:** Feed the Stream frames + Roboflow labels into `gemini.Realtime(fps=3)`. Configure the strict "ESPN Commentator" system prompt via the `instructions` parameter on the `Agent` class initialization.
-  - **Validation:** Mock test injecting standard CV labels and validating that text output chunking works gracefully.
+- [x] **4.2 Gemini Realtime Integration**
+  - **Details:** Feed the Stream frames + Roboflow labels into `gemini.Realtime(fps=3)` using `gemini.Realtime(model="gemini-2.5-flash", fps=3)`. Configure the strict "ESPN Commentator" system prompt via the `instructions` parameter on the `Agent` class initialization, and surface RF-DETR detection state to the LLM via the processor `state()`.
+  - **Validation:** Backend pytest suite including `test_gemini_realtime.py` (Gemini wiring + ESPN prompt) and `test_rfdetr_detection.py` (JSON payload + processor state) passes (`uv run pytest -q`).
 - [ ] **4.3 ElevenLabs TTS Integration**
   - **Details:** Route the string chunks from Gemini to `elevenlabs.TTS(voice_id="Chris")` in the agent pipeline.
   - **Validation:** Test that string chunks invoke the TTS handler and produce audio buffers.

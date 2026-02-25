@@ -7,7 +7,6 @@ import time
 from typing import Any
 
 from dotenv import load_dotenv
-from google.genai.types import HttpOptions
 from vision_agents.core import Agent, AgentLauncher, Runner, User
 from vision_agents.core.edge.events import CallEndedEvent
 from vision_agents.plugins import elevenlabs, gemini, getstream
@@ -112,17 +111,13 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
     # Stream Edge reads STREAM_API_KEY / STREAM_API_SECRET from env
     edge = getstream.Edge()
 
-    # Live API (API key): use Gemini API model ID; Vertex uses gemini-live-2.5-flash-native-audio.
+    # Gemini Realtime text model; audio is handled by ElevenLabs TTS (Sprint 4.3).
+    # See https://visionagents.ai/integrations/gemini for reference.
     llm = gemini.Realtime(
-        model="gemini-2.5-flash-native-audio-preview-12-2025",
+        model="gemini-2.5-flash",
         fps=3,
         api_key=google_api_key,
-        http_options=HttpOptions(api_version="v1beta"),
-        config={"response_modalities": ["AUDIO"]},
     )
-    # New Live API rejects enableAffectiveDialog in setup.generation_config; plugin default sends it.
-    if hasattr(llm, "_base_config") and "enable_affective_dialog" in llm._base_config:
-        del llm._base_config["enable_affective_dialog"]
 
     tts = elevenlabs.TTS(
         api_key=eleven_api_key,

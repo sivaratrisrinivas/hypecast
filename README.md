@@ -55,9 +55,9 @@ cd backend && uv sync && uv run pytest -v && uv run ruff check .
 | Part | Role |
 |------|------|
 | **frontend/** | Web app: landing, camera view (phone), spectator view (laptop). Next.js, React, Tailwind, TypeScript. |
-| **backend/** | Server: FastAPI in `app/main.py` (CORS, health at `/health`); session API in `routes/sessions.py` (POST/GET session, GET token); in-memory store in `services/store.py`, Stream JWT in `services/stream_token.py`, GCS in `services/gcs.py` (signed URLs + `upload_blob`); frame capture in `services/frame_capture.py` (WebRTC frames → `raw.webm` in GCS); `services/rfdetr_detection.py` adds a local RF-DETR processor (5fps, detects `person`/`sports ball`) built on `rfdetr`; `agent.py` runs Vision Agents Runner with Gemini + ElevenLabs and mounts the app under `/`; `models/` for data shapes, `tests/` for pytest. |
-| **docs/spec.md** | Full design: data shapes, APIs, how video and commentary flow. |
-| **docs/sprints.md** | Sprints 1–2 done; Sprint 3 done (Runner + mount, agent join, GCS, frame capture to GCS raw.webm); 4–5 planned. |
+| **backend/** | Server: FastAPI in `app/main.py` (CORS, health at `/health`); session API in `routes/sessions.py` (POST/GET session, GET token); in-memory store in `services/store.py`, Stream JWT in `services/stream_token.py`, GCS in `services/gcs.py` (signed URLs + `upload_blob`); frame capture in `services/frame_capture.py` (WebRTC frames → `raw.webm` in GCS); `services/rfdetr_detection.py` adds a local RF-DETR processor (5fps, detects `person`/`sports ball`) and exposes detection state to the agent; `agent.py` runs the Vision Agents Runner with Gemini Realtime + ElevenLabs wired for ESPN-style commentary and mounts the app under `/`; `models/` for data shapes, `tests/` for pytest (including Gemini Realtime wiring and RF-DETR state tests). |
+| **docs/spec.md** | Full design: data shapes, APIs, how video, RF-DETR detections, and Gemini/ElevenLabs commentary flow. |
+| **docs/sprints.md** | Sprint 1–3 done; Sprint 4 in progress with 4.1 (RF-DETR) and 4.2 (Gemini Realtime integration) implemented; Sprint 5 planned. |
 
 ---
 

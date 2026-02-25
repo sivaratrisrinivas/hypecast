@@ -402,7 +402,7 @@ hypecast/
 │   │   ├── reel_generator.py            # FFmpeg stitching + GCS upload (Sprint 5)
 │   │   ├── gcs.py                       # GCS client, signed URL + upload_blob (Sprint 3.3–3.4)
 │   │   ├── frame_capture.py             # FrameCaptureProcessor: WebRTC frames → raw.webm in GCS (Sprint 3.4)
-│   │   └── rfdetr_detection.py          # RF-DETR VideoProcessor: 5fps local detection (Sprint 4.1)
+│   │   └── rfdetr_detection.py          # RF-DETR VideoProcessor: 5fps local detection + state feed into Gemini (Sprint 4.1–4.2)
 │   │
 │   ├── routes/
 │   │   ├── __init__.py
@@ -410,13 +410,15 @@ hypecast/
 │   │
 │   └── tests/
 │       ├── __init__.py
-│       ├── test_agent_runner.py      # Runner health, FastAPI mount
-│       ├── test_gcs.py                # GCS signed URL + upload_blob (Sprint 3.3–3.4)
-│       ├── test_frame_capture.py      # Frame capture flush to mock upload buffer (Sprint 3.4)
-│       ├── test_main.py               # FastAPI app
+│       ├── test_agent_runner.py        # Runner health, FastAPI mount
+│       ├── test_gcs.py                 # GCS signed URL + upload_blob (Sprint 3.3–3.4)
+│       ├── test_frame_capture.py       # Frame capture flush to mock upload buffer (Sprint 3.4)
+│       ├── test_main.py                # FastAPI app
 │       ├── test_models.py
 │       ├── test_sessions_api.py        # POST/GET sessions, GET token
-│       ├── test_commentary_tracker.py # (Sprint 4)
+│       ├── test_rfdetr_detection.py    # RF-DETR JSON payload + processor state (Sprint 4.1–4.2)
+│       ├── test_gemini_realtime.py     # Gemini Realtime wiring + ESPN prompt (Sprint 4.2)
+│       ├── test_commentary_tracker.py  # (Sprint 4)
 │       └── test_reel_generator.py      # (Sprint 5)
 │
 └── scripts/
@@ -637,7 +639,7 @@ Lifecycle rule: delete objects older than 48 hours.
 
 - **Runner does not issue Stream tokens.** The spec previously implied a single “create session” response with `stream_token` and `join_url`. In reality, the Runner’s POST `/sessions` only returns `session_id`, `call_id`, `session_started_at`. Our app must expose a separate endpoint (e.g. POST `/api/session` or GET `/api/sessions/{id}/token`) that uses the Stream server-side SDK to create a user token; the frontend uses that token to create/join the call, then POSTs to Runner’s `/sessions` with the same `call_id`.
 - **Session end:** Use Runner’s **POST `/sessions/{session_id}/close`** (or DELETE) when the user taps END so the agent leaves the call; our app then runs reel generation and updates app-level session state.
-- **Gemini Realtime:** Default model in Vision Agents is `gemini-2.5-flash`; `fps` default is 1 — we use `fps=3`. Docs: [Gemini integration](https://visionagents.ai/integrations/gemini).
+- **Gemini Realtime:** Default model in Vision Agents is `gemini-2.5-flash`; `fps` default is 1 — we use `fps=3` via `gemini.Realtime(model="gemini-2.5-flash", fps=3)` and feed it both Stream frames and RF-DETR detection state. Docs: [Gemini integration](https://visionagents.ai/integrations/gemini).
 - **Roboflow local:** `RoboflowLocalDetectionProcessor` default `model_id` is `"rfdetr-seg-preview"`; we use `"rfdetr-base"`. Options include `rfdetr-nano`, `rfdetr-base`, `rfdetr-large`. No API key. Docs: [Roboflow integration](https://visionagents.ai/integrations/roboflow).
 - **ElevenLabs:** Default `voice_id` in docs is `"VR6AewLTigWG4xSOukaG"`; we use Chris (`Anr9GtYh2VRXxiPplzxM`). Docs: [ElevenLabs integration](https://visionagents.ai/integrations/elevenlabs).
 - **Realtime + custom TTS:** With `gemini.Realtime(fps=3)` we use ElevenLabs for TTS (custom voice). The Realtime class supports “direct audio” when the model does speech natively; for custom voices we keep the pipeline: Realtime (vision + text) → ElevenLabs TTS → Stream audio.
@@ -648,16 +650,18 @@ Lifecycle rule: delete objects older than 48 hours.
 
 ### 6.1 Backend — Python (`pytest`)
 
-| Test Area              | What to Test                                                          | Location                              |
-| ---------------------- | --------------------------------------------------------------------- | ------------------------------------- |
-| **Models**             | Dataclass instantiation, enum values, defaults                         | `backend/tests/test_models.py`        |
-| **GCS**                | Signed URL and upload_blob (mocked `google.cloud.storage`)            | `backend/tests/test_gcs.py`           |
-| **Frame capture**      | FrameWriter flush to mock upload buffer; WebM encoding                | `backend/tests/test_frame_capture.py` |
-| **Commentary Tracker** | Energy scoring from text, highlight keyword detection, threshold logic | `backend/tests/test_commentary_tracker.py` |
-| **Reel Generator**     | Highlight sorting, time window overlap removal, FFmpeg command construction (mocked) | `backend/tests/test_reel_generator.py` |
-| **Session Store**      | Session create/store/status (covered by sessions API tests)           | `backend/tests/test_sessions_api.py`  |
-| **API Routes**         | POST/GET sessions, GET token, 404 handling                             | `backend/tests/test_sessions_api.py` |
-| **Agent Runner**       | Runner health when FastAPI app is mounted                             | `backend/tests/test_agent_runner.py`  |
+| Test Area                  | What to Test                                                                 | Location                                |
+| -------------------------- | --------------------------------------------------------------------------- | --------------------------------------- |
+| **Models**                 | Dataclass instantiation, enum values, defaults                              | `backend/tests/test_models.py`          |
+| **GCS**                    | Signed URL and upload_blob (mocked `google.cloud.storage`)                 | `backend/tests/test_gcs.py`             |
+| **Frame capture**          | FrameWriter flush to mock upload buffer; WebM encoding                       | `backend/tests/test_frame_capture.py`   |
+| **RF-DETR Detection**      | JSON payload (person/ball bboxes) and latest state exposure to the agent    | `backend/tests/test_rfdetr_detection.py`|
+| **Gemini Realtime Wiring** | `gemini.Realtime(model="gemini-2.5-flash", fps=3)` + ESPN system prompt      | `backend/tests/test_gemini_realtime.py` |
+| **Commentary Tracker**     | Energy scoring from text, highlight keyword detection, threshold logic       | `backend/tests/test_commentary_tracker.py` |
+| **Reel Generator**         | Highlight sorting, time window overlap removal, FFmpeg command construction (mocked) | `backend/tests/test_reel_generator.py` |
+| **Session Store**          | Session create/store/status (covered by sessions API tests)                  | `backend/tests/test_sessions_api.py`    |
+| **API Routes**             | POST/GET sessions, GET token, 404 handling                                  | `backend/tests/test_sessions_api.py`    |
+| **Agent Runner**           | Runner health when FastAPI app is mounted                                    | `backend/tests/test_agent_runner.py`    |
 
 **Mocking strategy:**
 - Mock `google.cloud.storage` — no real GCS calls in tests.

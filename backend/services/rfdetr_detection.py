@@ -113,6 +113,7 @@ class RFDetrDetectionProcessor(VideoProcessor):
         self._frame_q: asyncio.Queue[VideoFrame] | None = None
         self._worker: asyncio.Task[None] | None = None
         self._session_id: str | None = None
+        self._latest_payload: dict[str, Any] | None = None
 
     def set_session_id(self, session_id: str) -> None:
         self._session_id = session_id
@@ -153,7 +154,20 @@ class RFDetrDetectionProcessor(VideoProcessor):
             if not session_id:
                 continue
             payload = self._detector.detect_frame(frame)
+            # Cache latest detections so the Vision Agents `Agent` can expose them
+            # to the LLM as processor state (frames + Roboflow labels in-context).
+            self._latest_payload = payload
             await detections_hub.publish(session_id, payload)
+
+    def state(self) -> dict[str, Any] | None:  # pragma: no cover - trivial getter
+        """
+        Expose the latest detection payload to the Agent.
+
+        Vision Agents passes each processor's state into the LLM context, which
+        lets Gemini commentary reason about structured Roboflow labels in
+        addition to raw video frames.
+        """
+        return self._latest_payload
 
     async def stop_processing(self) -> None:
         if self._worker is not None:
