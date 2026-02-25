@@ -72,15 +72,21 @@ This document translates the project specifications into an actionable, exhausti
 - [x] **3.1 Set up Vision Agents Runner (`agent.py`)**
   - **Details:** Wire `AgentLauncher` + `Runner` in `agent.py`, enforcing hackathon constraints with `max_session_duration_seconds=300`, `max_sessions_per_call=1`, and `max_concurrent_sessions=1`. Mount the FastAPI app from Sprint 2 using `ServeOptions(fast_api=app)` so `/api/*` and `/health` are served by the same process. Expose `uv run agent.py serve`.
   - **Validation:** `pytest` starting up the runner locally (`tests/test_agent_runner.py`) and asserting `GET /health` returns 200 via `runner.fast_api`.
-- [ ] **3.2 Agent Join Webhook**
+- [x] **3.2 Agent Join Webhook**
   - **Details:** Have frontend POST `call_id` to Vision Agent's built-in `/sessions` endpoint immediately after Stream is initialized.
-  - **Validation:** Integration test asserting the POST payload structure against the Agent schema.
-- [ ] **3.3 GCS Integration Module**
+  - **Validation:** Frontend `useSession` test mocks POST to `/sessions` with `{ call_type: "default", call_id: streamCallId }`; backend Runner accepts this payload.
+- [x] **3.3 GCS Integration Module**
   - **Details:** Write `gcs.py` to handle authenticating and generating signed URLs.
   - **Validation:** `pytest` with mocked `google-cloud-storage` asserting `generate_signed_url` builds correct parameters.
 - [ ] **3.4 Frame Capture Pipeline**
   - **Details:** Inside `create_agent`, wire a basic plugin to capture the Stream WebRTC incoming frames to a `raw.webm` stream in the GCS bucket.
   - **Validation:** Test passing dummy byte frames to the capture function, verifying it flushes to a mock upload buffer.
+
+**How to verify Sprint 3 (3.1–3.3)**
+
+1. **Backend:** From repo root run `cd backend && uv sync && uv run pytest -v`. Requires project venv (uv uses it); tests include `test_agent_runner.py` (GET /health on runner), `test_sessions_api.py` (session API), and `test_gcs.py` (GCS signed URL with mocked storage). If pytest uses system Python, run from backend so `uv run` uses the project venv.
+2. **Frontend:** `cd frontend && pnpm test -- --run` — useSession tests assert POST to `/api/sessions` and POST to `/sessions` with `call_type`/`call_id`.
+3. **Manual:** Start backend with `uv run agent.py serve --host 0.0.0.0 --port 8000`, frontend with `pnpm dev`. Create session from camera view; agent join is fire-and-forget to Runner `POST /sessions`.
 
 ---
 

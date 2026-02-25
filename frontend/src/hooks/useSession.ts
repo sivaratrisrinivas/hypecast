@@ -67,6 +67,35 @@ export function useSession(): UseSessionResult {
       }
       const body = (await res.json()) as Record<string, unknown>;
       const createPayload = mapCreateResponse(body);
+      // Fire-and-forget Vision Agents runner session so the agent joins the Stream call.
+      // Runner expects: POST /sessions { "call_type": "default", "call_id": "<stream_call_id>" }.
+      if (base && createPayload.streamCallId) {
+        // Use an async IIFE so test environments that stub `fetch` as a bare
+        // function (returning undefined) don't throw when accessing `.catch`.
+        // Any network error here is non-fatal to the main app flow.
+        void (async () => {
+          try {
+            await fetch(`${base}/sessions`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                call_type: "default",
+                call_id: createPayload.streamCallId,
+              }),
+            });
+          } catch (err) {
+            if (process.env.NODE_ENV === "development") {
+              // eslint-disable-next-line no-console
+              console.error(
+                "[useSession] Failed to start Vision Agent session:",
+                err,
+              );
+            }
+          }
+        })();
+      }
       setSession({
         ...createPayload,
         status: "waiting",

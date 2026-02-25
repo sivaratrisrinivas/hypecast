@@ -379,11 +379,14 @@ hypecast/
 │           └── globals.css              # Tailwind base + broadcast theme
 │
 ├── backend/                             # Python Vision Agents server
-│   ├── pyproject.toml                   # or requirements.txt
+│   ├── pyproject.toml
+│   ├── uv.lock
 │   ├── Dockerfile                       # Cloud Run container
 │   ├── .env.example
 │   │
-│   ├── agent.py                         # entrypoint — create_agent + join_call + Runner
+│   ├── agent.py                         # entrypoint — create_agent + join_call + Runner; mounts app at /api
+│   ├── app/
+│   │   └── main.py                      # FastAPI app, CORS, includes routes from routes.sessions
 │   │
 │   ├── models/
 │   │   ├── __init__.py
@@ -394,9 +397,10 @@ hypecast/
 │   ├── services/
 │   │   ├── __init__.py
 │   │   ├── store.py                     # in-memory session store
-│   │   ├── commentary_tracker.py        # energy scoring, highlight flagging
-│   │   ├── reel_generator.py            # FFmpeg stitching + GCS upload
-│   │   └── gcs.py                       # GCS client, signed URL generation
+│   │   ├── stream_token.py              # Stream JWT creation (getstream)
+│   │   ├── commentary_tracker.py        # energy scoring, highlight flagging (Sprint 4)
+│   │   ├── reel_generator.py            # FFmpeg stitching + GCS upload (Sprint 5)
+│   │   └── gcs.py                       # GCS client, signed URL generation (Sprint 3.3)
 │   │
 │   ├── routes/
 │   │   ├── __init__.py
@@ -404,9 +408,13 @@ hypecast/
 │   │
 │   └── tests/
 │       ├── __init__.py
-│       ├── test_commentary_tracker.py
-│       ├── test_reel_generator.py
-│       └── test_models.py
+│       ├── test_agent_runner.py      # Runner health, FastAPI mount
+│       ├── test_gcs.py                # GCS signed URL (Sprint 3.3)
+│       ├── test_main.py               # FastAPI app
+│       ├── test_models.py
+│       ├── test_sessions_api.py        # POST/GET sessions, GET token
+│       ├── test_commentary_tracker.py # (Sprint 4)
+│       └── test_reel_generator.py      # (Sprint 5)
 │
 └── scripts/
     └── example_prd.txt                  # (taskmaster)
@@ -640,10 +648,12 @@ Lifecycle rule: delete objects older than 48 hours.
 | Test Area              | What to Test                                                          | Location                              |
 | ---------------------- | --------------------------------------------------------------------- | ------------------------------------- |
 | **Models**             | Dataclass instantiation, enum values, defaults                         | `backend/tests/test_models.py`        |
+| **GCS**                | Signed URL generation (mocked `google.cloud.storage`)                 | `backend/tests/test_gcs.py`           |
 | **Commentary Tracker** | Energy scoring from text, highlight keyword detection, threshold logic | `backend/tests/test_commentary_tracker.py` |
 | **Reel Generator**     | Highlight sorting, time window overlap removal, FFmpeg command construction (mocked) | `backend/tests/test_reel_generator.py` |
-| **Session Store**      | CRUD operations on in-memory dict, status transitions                 | `backend/tests/test_store.py`         |
-| **API Routes**         | Request/response validation, 404/410 handling, status transitions      | `backend/tests/test_routes.py`        |
+| **Session Store**      | Session create/store/status (covered by sessions API tests)           | `backend/tests/test_sessions_api.py`  |
+| **API Routes**         | POST/GET sessions, GET token, 404 handling                             | `backend/tests/test_sessions_api.py` |
+| **Agent Runner**       | Runner health when FastAPI app is mounted                             | `backend/tests/test_agent_runner.py`  |
 
 **Mocking strategy:**
 - Mock `google.cloud.storage` — no real GCS calls in tests.

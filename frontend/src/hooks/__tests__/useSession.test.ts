@@ -37,6 +37,11 @@ describe("useSession", () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        json: async () => ({}),
+      })
+      .mockResolvedValue({
+        ok: true,
+        status: 200,
         json: async () => ({ status: "waiting", reel_id: null, reel_url: null }),
       });
 
@@ -47,6 +52,17 @@ describe("useSession", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(`${BASE}/api/sessions`, { method: "POST" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${BASE}/sessions`,
+      expect.objectContaining({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          call_type: "default",
+          call_id: "pickup-sid-1",
+        }),
+      })
+    );
     expect(result.current.session).not.toBeNull();
     expect(result.current.session?.status).toBe("waiting");
     expect(result.current.session?.sessionId).toBe("sid-1");
@@ -70,6 +86,11 @@ describe("useSession", () => {
         }),
       })
       .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+      })
+      .mockResolvedValue({
         ok: true,
         status: 200,
         json: async () => ({ status: "live", reel_id: null, reel_url: null }),

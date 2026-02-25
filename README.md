@@ -42,10 +42,10 @@ The API and Vision Agents runner are at [http://localhost:8000](http://localhost
 
 ```bash
 # Frontend: lint and tests
-cd frontend && pnpm lint && pnpm test
+cd frontend && pnpm lint && pnpm test -- --run
 
-# Backend: tests and lint
-cd backend && uv run pytest -v && uv run ruff check .
+# Backend: sync deps then tests and lint (run from backend dir so uv uses project venv)
+cd backend && uv sync && uv run pytest -v && uv run ruff check .
 ```
 
 ---
@@ -55,9 +55,9 @@ cd backend && uv run pytest -v && uv run ruff check .
 | Part | Role |
 |------|------|
 | **frontend/** | Web app: landing, camera view (phone), spectator view (laptop). Next.js, React, Tailwind, TypeScript. |
-| **backend/** | Server that creates sessions, issues Stream tokens, and exposes session polling. FastAPI app in `app/main.py`; session API in `routes/sessions.py` (POST/GET session, GET token), in-memory store in `services/store.py`; `models/` for data shapes, `tests/` for pytest. |
+| **backend/** | Server: FastAPI in `app/main.py` (CORS, health at `/api/health` when mounted); session API in `routes/sessions.py` (POST/GET session, GET token); in-memory store in `services/store.py`, Stream JWT in `services/stream_token.py`, GCS signed URLs in `services/gcs.py`; `agent.py` runs Vision Agents Runner and mounts the app at `/api`; `models/` for data shapes, `tests/` for pytest. |
 | **docs/spec.md** | Full design: data shapes, APIs, how video and commentary flow. |
-| **docs/sprints.md** | Task plan: Sprints 1 and 2 done (session store, token API, useSession hook, Stream SDK broadcaster in CameraView, SpectatorView Stream subscriber); Sprint 3.1 wired the Vision Agents runner; Sprints 3.2–5 planned (agent join, commentary, reels, polish). |
+| **docs/sprints.md** | Sprints 1–2 done; Sprint 3.1–3.3 done (Runner + mount, agent join, GCS signed URLs); 3.4 (frame capture) and 4–5 planned. |
 
 ---
 

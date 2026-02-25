@@ -10,7 +10,7 @@ from models.session import GameSession, SessionStatus
 from services.store import sessions
 from services.stream_token import create_stream_token
 
-router = APIRouter(prefix="/api", tags=["sessions"])
+router = APIRouter(tags=["sessions"])
 
 TOKEN_VALIDITY_SECONDS = 3600
 VALID_ROLES = ("camera", "spectator")
