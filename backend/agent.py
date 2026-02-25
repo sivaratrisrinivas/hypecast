@@ -16,6 +16,7 @@ from models.session import SessionStatus
 from services.frame_capture import FrameCaptureProcessor
 from services.rfdetr_detection import RFDetrDetectionProcessor
 from services.store import sessions
+from services.tts_fallback import wrap_tts_with_fallback
 
 # Load .env from backend dir (where agent.py runs)
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
@@ -165,6 +166,10 @@ async def join_call(agent: Agent, call_type: str, call_id: str, **kwargs: Any) -
     # Set GCS path for frame capture before join so raw.webm is written to sessions/{session_id}/raw.webm.
     session_id = call_id.removeprefix("pickup-") if call_id.startswith("pickup-") else None
     if session_id:
+        # Expose the logical session_id on the agent so downstream helpers
+        # (e.g. TTS fallback / commentary tracking) can resolve it.
+        setattr(agent, "_session_id", session_id)
+
         for p in agent.processors:
             if isinstance(p, FrameCaptureProcessor):
                 p.set_output_blob_path(f"sessions/{session_id}/raw.webm")
@@ -173,6 +178,13 @@ async def join_call(agent: Agent, call_type: str, call_id: str, **kwargs: Any) -
             if isinstance(p, RFDetrDetectionProcessor):
                 p.set_session_id(session_id)
                 break
+
+        # Wrap ElevenLabs TTS so that:
+        #   - all commentary text is logged via CommentaryTracker
+        #   - failures trigger graceful fallback over WebSockets
+        tts = getattr(agent, "tts", None)
+        if tts is not None:
+            wrap_tts_with_fallback(tts, session_id_provider=lambda: getattr(agent, "_session_id", None))
 
     # Establish Gemini (or other Realtime LLM) session before edge.join().
     # The agent's normal join() does llm.connect() then edge.join(); we must do the same or

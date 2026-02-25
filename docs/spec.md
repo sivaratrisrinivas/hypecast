@@ -398,7 +398,8 @@ hypecast/
 │   │   ├── __init__.py
 │   │   ├── store.py                     # in-memory session store
 │   │   ├── stream_token.py              # Stream JWT creation (getstream)
-│   │   ├── commentary_tracker.py        # energy scoring, highlight flagging (Sprint 4)
+│   │   ├── commentary_tracker.py        # CommentaryTracker: energy scoring + highlight flagging (Sprint 4.4)
+│   │   ├── tts_fallback.py              # ElevenLabs TTS wrapper with graceful fallback to text/WebSocket (Sprint 4.5)
 │   │   ├── reel_generator.py            # FFmpeg stitching + GCS upload (Sprint 5)
 │   │   ├── gcs.py                       # GCS client, signed URL + upload_blob (Sprint 3.3–3.4)
 │   │   ├── frame_capture.py             # FrameCaptureProcessor: WebRTC frames → raw.webm in GCS (Sprint 3.4)
@@ -406,7 +407,9 @@ hypecast/
 │   │
 │   ├── routes/
 │   │   ├── __init__.py
-│   │   └── sessions.py                  # REST endpoints (if extending beyond Runner defaults)
+│   │   ├── sessions.py                  # REST endpoints (if extending beyond Runner defaults)
+│   │   ├── detections_ws.py             # WebSocket: RF-DETR detection stream per session
+│   │   └── commentary_ws.py             # WebSocket: commentary/highlight stream per session (fallback text)
 │   │
 │   └── tests/
 │       ├── __init__.py
@@ -450,6 +453,20 @@ Stream Edge Network (WebRTC SFU)
             │  Detects: "person", "sports ball"
             │  conf_threshold: 0.5
             │  Detection metadata available to the agent / LLM
+
+In parallel, `CommentaryTracker` receives each Gemini text chunk (via the TTS wrapper) and:
+
+- Computes an `energy_level` heuristic score in \[0.0, 1.0\]
+- Flags entries as highlights when `energy_level > ENERGY_THRESHOLD` (0.75), especially when hype keywords like `"UNBELIEVABLE"` appear
+- Appends `CommentaryEntry` objects to the `GameSession.commentary_log`
+
+If ElevenLabs fails (e.g. API error or rate limit), `services.tts_fallback.wrap_tts_with_fallback`:
+
+- Logs the error
+- Still records the commentary line via `CommentaryTracker`
+- Publishes `{ "text", "energy_level", "is_highlight" }` to `CommentaryHub`, which is exposed over `/api/ws/sessions/{id}/commentary`
+
+The frontend can subscribe to this commentary WebSocket and use browser `SpeechSynthesis` (or another local TTS) to speak the fallback text, preserving the user experience when ElevenLabs is unavailable.
 ```
 
 ### 4.4 Data Flow — Highlight Reel Generation

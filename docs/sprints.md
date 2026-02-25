@@ -104,9 +104,9 @@ This document translates the project specifications into an actionable, exhausti
 - [x] **4.3 ElevenLabs TTS Integration**
   - **Details:** Route the string chunks from Gemini to `elevenlabs.TTS(voice_id="Chris")` in the agent pipeline. Default voice is `Chris`, overridable via `ELEVENLABS_VOICE_ID`.
   - **Validation:** `backend/tests/test_elevenlabs_tts.py` patches `gemini.Realtime` and `elevenlabs.TTS` to a fake TTS implementation, asserts that `create_agent()` wires ElevenLabs with the Chris voice by default, and verifies that text chunks invoke the TTS handler and produce non-empty audio buffers.
-- [ ] **4.4 Commentary Logging & Energy Scoring**
-  - **Details:** Capture Gemini text outputs in `CommentaryTracker`. Score >0.75 if keywords ("UNBELIEVABLE") appear.
-  - **Validation:** parameterized `pytest` running multiple raw sentences to verify `is_highlight` boolean outputs.
+- [x] **4.4 Commentary Logging & Energy Scoring**
+  - **Details:** Capture Gemini text outputs in `CommentaryTracker`. Each line gets an `energy_level` heuristic score in \[0.0–1.0\]; entries with hype keywords like "UNBELIEVABLE" intentionally score >0.75 and are flagged as `is_highlight` for downstream reel generation.
+  - **Validation:** `backend/tests/test_commentary_tracker.py` uses parameterized sentences to verify `energy_level` and `is_highlight` behavior and ensures entries are appended to `GameSession.commentary_log` with timestamps relative to `created_at`.
 - [ ] **4.5 Graceful Degradation / Fallback**
   - **Details:** If ElevenLabs fails or rate limits, fallback to standard TTS or send raw text via WebSockets so the frontend can use `SpeechSynthesis`.
   - **Validation:** Exception injection test ensuring the fallback loop triggers.
