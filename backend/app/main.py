@@ -5,6 +5,7 @@ load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from routes.detections_ws import router as detections_ws_router
 from routes.sessions import router as sessions_router
 
 app = FastAPI(
@@ -19,7 +20,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(sessions_router)
+app.include_router(sessions_router, prefix="/api")
+app.include_router(detections_ws_router, prefix="/api")
 
 
 @app.get("/health")

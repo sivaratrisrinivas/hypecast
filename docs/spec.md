@@ -105,7 +105,7 @@ Phone (Camera)                  System                          Laptop (Spectato
 | **Stream**             | `getstream.Edge()`                                | WebRTC video/audio transport         | `STREAM_API_KEY` + `STREAM_API_SECRET` |
 | **Gemini**             | `gemini.Realtime(fps=3)`                          | Vision AI — frame analysis, commentary generation | `GOOGLE_API_KEY`             |
 | **ElevenLabs**         | `elevenlabs.TTS(voice_id="Anr9GtYh2VRXxiPplzxM")`| Text-to-speech — ESPN commentator voice (Chris) | `ELEVENLABS_API_KEY`         |
-| **Roboflow**           | `roboflow.RoboflowLocalDetectionProcessor`        | Local object detection (RF-DETR), no API key | None (runs locally)          |
+| **Roboflow / RF-DETR** | `rfdetr` + custom `VideoProcessor`               | Local object detection (RF-DETR), no API key | None (runs locally)          |
 | **Google Cloud Storage** | `google-cloud-storage` Python SDK               | Temporary video + reel storage       | GCP service account            |
 
 ### Dev Tools
@@ -295,7 +295,7 @@ sessions: dict[str, GameSession] = {}
                                                   │  │       ▼            │ │  │
                                                   │  │  Audio → Stream    │ │  │
                                                   │  │                    │ │  │
-                                                  │  │  Roboflow RF-DETR  │ │  │
+                                                  │  │  RF-DETR Detector  │ │  │
                                                   │  │  (5fps local det.) │ │  │
                                                   │  └───────────────────┘│  │
                                                   │                       │  │
@@ -384,7 +384,7 @@ hypecast/
 │   ├── Dockerfile                       # Cloud Run container
 │   ├── .env.example
 │   │
-│   ├── agent.py                         # entrypoint — create_agent + join_call + Runner; mounts app at /api
+│   ├── agent.py                         # entrypoint — create_agent + join_call + Runner; mounts FastAPI app at /
 │   ├── app/
 │   │   └── main.py                      # FastAPI app, CORS, includes routes from routes.sessions
 │   │
@@ -401,7 +401,8 @@ hypecast/
 │   │   ├── commentary_tracker.py        # energy scoring, highlight flagging (Sprint 4)
 │   │   ├── reel_generator.py            # FFmpeg stitching + GCS upload (Sprint 5)
 │   │   ├── gcs.py                       # GCS client, signed URL + upload_blob (Sprint 3.3–3.4)
-│   │   └── frame_capture.py             # FrameCaptureProcessor: WebRTC frames → raw.webm in GCS (Sprint 3.4)
+│   │   ├── frame_capture.py             # FrameCaptureProcessor: WebRTC frames → raw.webm in GCS (Sprint 3.4)
+│   │   └── rfdetr_detection.py          # RF-DETR VideoProcessor: 5fps local detection (Sprint 4.1)
 │   │
 │   ├── routes/
 │   │   ├── __init__.py
@@ -443,10 +444,10 @@ Stream Edge Network (WebRTC SFU)
      │       ▼
      │    Laptop speaker — spectator hears commentary
      │
-     └──▶ Roboflow RF-DETR (5fps, local)
+     └──▶ RF-DETR (5fps, local, via `rfdetr`)
             │  Detects: "person", "sports ball"
             │  conf_threshold: 0.5
-            │  Annotated frames fed to Gemini for richer context
+            │  Detection metadata available to the agent / LLM
 ```
 
 ### 4.4 Data Flow — Highlight Reel Generation
@@ -578,7 +579,7 @@ async def create_agent(**kwargs) -> Agent:
       - getstream.Edge() for video transport
       - gemini.Realtime(fps=3) for vision LLM
       - elevenlabs.TTS(voice_id=CHRIS) for speech
-      - roboflow.RoboflowLocalDetectionProcessor for object detection
+      - RF-DETR-based VideoProcessor for object detection (5fps, person/ball)
     """
 
 async def join_call(agent: Agent, call_type: str, call_id: str, **kwargs) -> None:

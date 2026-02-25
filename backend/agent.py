@@ -15,6 +15,7 @@ from vision_agents.plugins import elevenlabs, gemini, getstream
 from app.main import app as api_app
 from models.session import SessionStatus
 from services.frame_capture import FrameCaptureProcessor
+from services.rfdetr_detection import RFDetrDetectionProcessor
 from services.store import sessions
 
 # Load .env from backend dir (where agent.py runs)
@@ -130,21 +131,8 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
 
     # Frame capture: save incoming WebRTC frames to GCS raw.webm (path set in join_call).
     frame_capture = FrameCaptureProcessor(fps=15)
-    processors: list[Any] = [frame_capture]
-    # Roboflow optional: vision-agents-plugins-roboflow conflicts with getstream's aiohttp;
-    # add it when the ecosystem resolves. Until then, commentary works without object detection.
-    try:
-        from vision_agents.plugins import roboflow
-        roboflow_processor = roboflow.RoboflowLocalDetectionProcessor(
-            model_id="rfdetr-base",
-            fps=5,
-            conf_threshold=0.5,
-            classes=["person", "sports ball"],
-            annotate=False,
-        )
-        processors.append(roboflow_processor)
-    except (ImportError, AttributeError) as e:
-        logging.warning("Roboflow processor unavailable (optional): %s", e)
+    detection = RFDetrDetectionProcessor(fps=5, threshold=0.5)
+    processors: list[Any] = [frame_capture, detection]
 
     agent_user = User(id="hypecast-agent", name="Hypecast Commentator")
 
@@ -184,6 +172,10 @@ async def join_call(agent: Agent, call_type: str, call_id: str, **kwargs: Any) -
         for p in agent.processors:
             if isinstance(p, FrameCaptureProcessor):
                 p.set_output_blob_path(f"sessions/{session_id}/raw.webm")
+                break
+        for p in agent.processors:
+            if isinstance(p, RFDetrDetectionProcessor):
+                p.set_session_id(session_id)
                 break
 
     # Establish Gemini (or other Realtime LLM) session before edge.join().
@@ -230,10 +222,9 @@ runner = Runner(
     ),
 )
 
-# Mount the existing FastAPI app under `/api` on the Vision Agents runner app.
-# The app's routes are defined WITHOUT an /api prefix (see routes/sessions.py);
-# mounting at /api exposes them as /api/sessions, /api/health, etc.
-runner.fast_api.mount("/api", api_app)
+# Mount the existing FastAPI app (which prefixes its own routes under `/api`)
+# at the root of the Vision Agents runner app.
+runner.fast_api.mount("/", api_app)
 for route in api_app.routes:
     if hasattr(route, "path") and hasattr(route, "methods"):
         logging.info("App route: %s %s", list(route.methods) if route.methods else "GET", route.path)

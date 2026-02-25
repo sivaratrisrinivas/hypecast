@@ -95,9 +95,9 @@ This document translates the project specifications into an actionable, exhausti
 **Demoable Outcome:** Real-time ESPN commentary (ElevenLabs TTS) streams from the laptop as the phone points at a live game. Bounding boxes or terminal logs show "person" and "ball" detections.
 
 ### Tasks:
-- [ ] **4.1 Roboflow RF-DETR Integration**
-  - **Details:** Add `RoboflowLocalDetectionProcessor(model_id="rfdetr-base")` to the agent pipeline to detect players/balls at 5fps.
-  - **Validation:** Unit test providing a static sample frame, asserting the processor emits JSON bounding boxes.
+- [x] **4.1 RF-DETR Integration (Local)**
+  - **Details:** Add an RF-DETR-based `VideoProcessor` to the agent pipeline (built on `rfdetr`) to detect players/balls at 5fps. Expose detection metadata via an internal hub (and optionally WebSocket) for later UI overlays.
+  - **Validation:** Unit test providing a static sample frame (via a fake model) asserting the processor emits JSON bounding boxes for `person`/`sports ball`.
 - [ ] **4.2 Gemini Realtime Integration**
   - **Details:** Feed the Stream frames + Roboflow labels into `gemini.Realtime(fps=3)`. Configure the strict "ESPN Commentator" system prompt via the `instructions` parameter on the `Agent` class initialization.
   - **Validation:** Mock test injecting standard CV labels and validating that text output chunking works gracefully.

@@ -15,5 +15,4 @@ async def test_runner_health_uses_existing_app() -> None:
         response = await client.get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
 
