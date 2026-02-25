@@ -7,6 +7,28 @@ DEFAULT_BUCKET = "hypecast-media"
 REEL_EXPIRATION_SECONDS = 48 * 3600  # 48 hours
 
 
+def upload_blob(
+    blob_name: str,
+    data: bytes,
+    *,
+    bucket_name: str | None = None,
+) -> None:
+    """
+    Upload raw bytes to a GCS object (e.g. session raw.webm).
+
+    :param blob_name: Object path in bucket, e.g. "sessions/sid123/raw.webm"
+    :param data: Raw bytes to upload
+    :param bucket_name: GCS bucket; default from GCS_BUCKET env or "hypecast-media"
+    """
+    from google.cloud import storage
+
+    bucket_name = bucket_name or get_bucket_name()
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(blob_name)
+    blob.upload_from_string(data, content_type="video/webm")
+
+
 def get_bucket_name() -> str:
     """Bucket name from env or default."""
     return os.environ.get("GCS_BUCKET", "").strip() or DEFAULT_BUCKET

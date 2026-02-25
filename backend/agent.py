@@ -1,15 +1,21 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
 from typing import Any
 
 from dotenv import load_dotenv
+from google.genai.types import HttpOptions
 from vision_agents.core import Agent, AgentLauncher, Runner, User
+from vision_agents.core.edge.events import CallEndedEvent
 from vision_agents.plugins import elevenlabs, gemini, getstream
 
 from app.main import app as api_app
+from models.session import SessionStatus
+from services.frame_capture import FrameCaptureProcessor
+from services.store import sessions
 
 # Load .env from backend dir (where agent.py runs)
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
@@ -91,9 +97,12 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
             "STREAM_API_KEY/STREAM_API_SECRET not set; Edge transport will likely fail.",
         )
 
-    google_api_key = os.environ.get("GOOGLE_API_KEY")
+    google_api_key = os.environ.get("GOOGLE_API_KEY", "").strip()
     if not google_api_key:
-        logging.warning("GOOGLE_API_KEY not set; Gemini Realtime will not be able to connect.")
+        raise RuntimeError(
+            "GOOGLE_API_KEY is not set. Set it in backend/.env or the environment. "
+            "Without it the agent will spam 'Gemini Session is not established' and produce no commentary."
+        )
 
     eleven_api_key = os.environ.get("ELEVENLABS_API_KEY")
     if not eleven_api_key:
@@ -102,20 +111,28 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
     # Stream Edge reads STREAM_API_KEY / STREAM_API_SECRET from env
     edge = getstream.Edge()
 
+    # Live API (API key): use Gemini API model ID; Vertex uses gemini-live-2.5-flash-native-audio.
     llm = gemini.Realtime(
-        model="gemini-2.5-flash",
+        model="gemini-2.5-flash-native-audio-preview-12-2025",
         fps=3,
         api_key=google_api_key,
+        http_options=HttpOptions(api_version="v1beta"),
+        config={"response_modalities": ["AUDIO"]},
     )
+    # New Live API rejects enableAffectiveDialog in setup.generation_config; plugin default sends it.
+    if hasattr(llm, "_base_config") and "enable_affective_dialog" in llm._base_config:
+        del llm._base_config["enable_affective_dialog"]
 
     tts = elevenlabs.TTS(
         api_key=eleven_api_key,
         voice_id="Anr9GtYh2VRXxiPplzxM",
     )
 
+    # Frame capture: save incoming WebRTC frames to GCS raw.webm (path set in join_call).
+    frame_capture = FrameCaptureProcessor(fps=15)
+    processors: list[Any] = [frame_capture]
     # Roboflow optional: vision-agents-plugins-roboflow conflicts with getstream's aiohttp;
     # add it when the ecosystem resolves. Until then, commentary works without object detection.
-    processors: list[Any] = []
     try:
         from vision_agents.plugins import roboflow
         roboflow_processor = roboflow.RoboflowLocalDetectionProcessor(
@@ -161,13 +178,44 @@ async def join_call(agent: Agent, call_type: str, call_id: str, **kwargs: Any) -
     # Create or fetch the Stream call via Edge (requires agent_user_id for server-side auth).
     call = await agent.edge.create_call(call_id=call_id, call_type=call_type)  # type: ignore[arg-type]
 
+    # Set GCS path for frame capture before join so raw.webm is written to sessions/{session_id}/raw.webm.
+    session_id = call_id.removeprefix("pickup-") if call_id.startswith("pickup-") else None
+    if session_id:
+        for p in agent.processors:
+            if isinstance(p, FrameCaptureProcessor):
+                p.set_output_blob_path(f"sessions/{session_id}/raw.webm")
+                break
+
+    # Establish Gemini (or other Realtime LLM) session before edge.join().
+    # The agent's normal join() does llm.connect() then edge.join(); we must do the same or
+    # video frames are sent before _real_session exists and we get "Gemini Session is not established yet".
+    if hasattr(agent.llm, "connect") and callable(agent.llm.connect):
+        await agent.llm.connect()
+        logging.info("[join_call] Realtime LLM connected.")
+
     # Join call and run until completion.
+    # StreamConnection has no .wait(); we wait for CallEndedEvent from the edge instead.
     connection = await agent.edge.join(agent, call)
+    # Mark app session LIVE so frontend polling stops showing "Awaiting connection...".
+    if session_id and session_id in sessions:
+        sessions[session_id].status = SessionStatus.LIVE
+        logging.info("[join_call] Session %s set to LIVE.", session_id)
     logging.info("[join_call] Agent joined call; waiting for call to end.")
 
+    call_ended = asyncio.Event()
+    max_wait = 300.0  # match max_session_duration_seconds
+
+    async def on_call_ended(_event: CallEndedEvent):
+        call_ended.set()
+
+    agent.edge.events.subscribe(on_call_ended)
     try:
-        await connection.wait()
+        try:
+            await asyncio.wait_for(call_ended.wait(), timeout=max_wait)
+        except asyncio.TimeoutError:
+            logging.info("[join_call] Max session duration reached; ending call.")
     finally:
+        agent.edge.events.unsubscribe(on_call_ended)
         logging.info("[join_call] Call finished; closing agent and edge transport.")
         await agent.close()
 

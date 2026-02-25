@@ -55,9 +55,9 @@ cd backend && uv sync && uv run pytest -v && uv run ruff check .
 | Part | Role |
 |------|------|
 | **frontend/** | Web app: landing, camera view (phone), spectator view (laptop). Next.js, React, Tailwind, TypeScript. |
-| **backend/** | Server: FastAPI in `app/main.py` (CORS, health at `/api/health` when mounted); session API in `routes/sessions.py` (POST/GET session, GET token); in-memory store in `services/store.py`, Stream JWT in `services/stream_token.py`, GCS signed URLs in `services/gcs.py`; `agent.py` runs Vision Agents Runner and mounts the app at `/api`; `models/` for data shapes, `tests/` for pytest. |
+| **backend/** | Server: FastAPI in `app/main.py` (CORS, health at `/api/health` when mounted); session API in `routes/sessions.py` (POST/GET session, GET token); in-memory store in `services/store.py`, Stream JWT in `services/stream_token.py`, GCS in `services/gcs.py` (signed URLs + `upload_blob`); frame capture in `services/frame_capture.py` (WebRTC frames → raw.webm in GCS); `agent.py` runs Vision Agents Runner and mounts the app at `/api`; `models/` for data shapes, `tests/` for pytest. |
 | **docs/spec.md** | Full design: data shapes, APIs, how video and commentary flow. |
-| **docs/sprints.md** | Sprints 1–2 done; Sprint 3.1–3.3 done (Runner + mount, agent join, GCS signed URLs); 3.4 (frame capture) and 4–5 planned. |
+| **docs/sprints.md** | Sprints 1–2 done; Sprint 3 done (Runner + mount, agent join, GCS, frame capture to GCS raw.webm); 4–5 planned. |
 
 ---
 

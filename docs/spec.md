@@ -400,7 +400,8 @@ hypecast/
 │   │   ├── stream_token.py              # Stream JWT creation (getstream)
 │   │   ├── commentary_tracker.py        # energy scoring, highlight flagging (Sprint 4)
 │   │   ├── reel_generator.py            # FFmpeg stitching + GCS upload (Sprint 5)
-│   │   └── gcs.py                       # GCS client, signed URL generation (Sprint 3.3)
+│   │   ├── gcs.py                       # GCS client, signed URL + upload_blob (Sprint 3.3–3.4)
+│   │   └── frame_capture.py             # FrameCaptureProcessor: WebRTC frames → raw.webm in GCS (Sprint 3.4)
 │   │
 │   ├── routes/
 │   │   ├── __init__.py
@@ -409,7 +410,8 @@ hypecast/
 │   └── tests/
 │       ├── __init__.py
 │       ├── test_agent_runner.py      # Runner health, FastAPI mount
-│       ├── test_gcs.py                # GCS signed URL (Sprint 3.3)
+│       ├── test_gcs.py                # GCS signed URL + upload_blob (Sprint 3.3–3.4)
+│       ├── test_frame_capture.py      # Frame capture flush to mock upload buffer (Sprint 3.4)
 │       ├── test_main.py               # FastAPI app
 │       ├── test_models.py
 │       ├── test_sessions_api.py        # POST/GET sessions, GET token
@@ -648,7 +650,8 @@ Lifecycle rule: delete objects older than 48 hours.
 | Test Area              | What to Test                                                          | Location                              |
 | ---------------------- | --------------------------------------------------------------------- | ------------------------------------- |
 | **Models**             | Dataclass instantiation, enum values, defaults                         | `backend/tests/test_models.py`        |
-| **GCS**                | Signed URL generation (mocked `google.cloud.storage`)                 | `backend/tests/test_gcs.py`           |
+| **GCS**                | Signed URL and upload_blob (mocked `google.cloud.storage`)            | `backend/tests/test_gcs.py`           |
+| **Frame capture**      | FrameWriter flush to mock upload buffer; WebM encoding                | `backend/tests/test_frame_capture.py` |
 | **Commentary Tracker** | Energy scoring from text, highlight keyword detection, threshold logic | `backend/tests/test_commentary_tracker.py` |
 | **Reel Generator**     | Highlight sorting, time window overlap removal, FFmpeg command construction (mocked) | `backend/tests/test_reel_generator.py` |
 | **Session Store**      | Session create/store/status (covered by sessions API tests)           | `backend/tests/test_sessions_api.py`  |

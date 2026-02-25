@@ -11,6 +11,7 @@ from services.gcs import (
     REEL_EXPIRATION_SECONDS,
     generate_signed_url,
     get_bucket_name,
+    upload_blob,
 )
 
 
@@ -101,3 +102,29 @@ def test_generate_signed_url_default_expiration_48h() -> None:
     now_utc = datetime.now(timezone.utc)
     expected_seconds = REEL_EXPIRATION_SECONDS
     assert abs((expiration - now_utc).total_seconds() - expected_seconds) < 5
+
+
+def test_upload_blob_calls_upload_from_string() -> None:
+    """Sprint 3.4: upload_blob uploads bytes to the given blob path."""
+    mock_blob = MagicMock()
+    mock_bucket = MagicMock()
+    mock_bucket.blob.return_value = mock_blob
+    mock_client = MagicMock()
+    mock_client.bucket.return_value = mock_bucket
+    mock_storage = MagicMock()
+    mock_storage.Client.return_value = mock_client
+    mock_cloud = MagicMock()
+    mock_cloud.storage = mock_storage
+
+    with (
+        patch.dict(
+            sys.modules,
+            {"google": MagicMock(), "google.cloud": mock_cloud, "google.cloud.storage": mock_storage},
+        ),
+        patch("services.gcs.get_bucket_name", return_value=DEFAULT_BUCKET),
+    ):
+        upload_blob("sessions/sid456/raw.webm", b"fake-webm-bytes", bucket_name=DEFAULT_BUCKET)
+
+    mock_client.bucket.assert_called_once_with(DEFAULT_BUCKET)
+    mock_bucket.blob.assert_called_once_with("sessions/sid456/raw.webm")
+    mock_blob.upload_from_string.assert_called_once_with(b"fake-webm-bytes", content_type="video/webm")

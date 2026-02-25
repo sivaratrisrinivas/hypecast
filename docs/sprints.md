@@ -78,13 +78,13 @@ This document translates the project specifications into an actionable, exhausti
 - [x] **3.3 GCS Integration Module**
   - **Details:** Write `gcs.py` to handle authenticating and generating signed URLs.
   - **Validation:** `pytest` with mocked `google-cloud-storage` asserting `generate_signed_url` builds correct parameters.
-- [ ] **3.4 Frame Capture Pipeline**
+- [x] **3.4 Frame Capture Pipeline**
   - **Details:** Inside `create_agent`, wire a basic plugin to capture the Stream WebRTC incoming frames to a `raw.webm` stream in the GCS bucket.
   - **Validation:** Test passing dummy byte frames to the capture function, verifying it flushes to a mock upload buffer.
 
-**How to verify Sprint 3 (3.1–3.3)**
+**How to verify Sprint 3 (3.1–3.4)**
 
-1. **Backend:** From repo root run `cd backend && uv sync && uv run pytest -v`. Requires project venv (uv uses it); tests include `test_agent_runner.py` (GET /health on runner), `test_sessions_api.py` (session API), and `test_gcs.py` (GCS signed URL with mocked storage). If pytest uses system Python, run from backend so `uv run` uses the project venv.
+1. **Backend:** From repo root run `cd backend && uv sync && uv run pytest -v`. Requires project venv (uv uses it); tests include `test_agent_runner.py` (GET /health on runner), `test_sessions_api.py` (session API), `test_gcs.py` (GCS signed URL and upload_blob with mocked storage), and `test_frame_capture.py` (frame writer flush to mock upload buffer). If pytest uses system Python, run from backend so `uv run` uses the project venv.
 2. **Frontend:** `cd frontend && pnpm test -- --run` — useSession tests assert POST to `/api/sessions` and POST to `/sessions` with `call_type`/`call_id`.
 3. **Manual:** Start backend with `uv run agent.py serve --host 0.0.0.0 --port 8000`, frontend with `pnpm dev`. Create session from camera view; agent join is fire-and-forget to Runner `POST /sessions`.
 
