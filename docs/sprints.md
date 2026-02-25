@@ -101,9 +101,9 @@ This document translates the project specifications into an actionable, exhausti
 - [x] **4.2 Gemini Realtime Integration**
   - **Details:** Feed the Stream frames + Roboflow labels into `gemini.Realtime(fps=3)` using `gemini.Realtime(model="gemini-2.5-flash", fps=3)`. Configure the strict "ESPN Commentator" system prompt via the `instructions` parameter on the `Agent` class initialization, and surface RF-DETR detection state to the LLM via the processor `state()`.
   - **Validation:** Backend pytest suite including `test_gemini_realtime.py` (Gemini wiring + ESPN prompt) and `test_rfdetr_detection.py` (JSON payload + processor state) passes (`uv run pytest -q`).
-- [ ] **4.3 ElevenLabs TTS Integration**
-  - **Details:** Route the string chunks from Gemini to `elevenlabs.TTS(voice_id="Chris")` in the agent pipeline.
-  - **Validation:** Test that string chunks invoke the TTS handler and produce audio buffers.
+- [x] **4.3 ElevenLabs TTS Integration**
+  - **Details:** Route the string chunks from Gemini to `elevenlabs.TTS(voice_id="Chris")` in the agent pipeline. Default voice is `Chris`, overridable via `ELEVENLABS_VOICE_ID`.
+  - **Validation:** `backend/tests/test_elevenlabs_tts.py` patches `gemini.Realtime` and `elevenlabs.TTS` to a fake TTS implementation, asserts that `create_agent()` wires ElevenLabs with the Chris voice by default, and verifies that text chunks invoke the TTS handler and produce non-empty audio buffers.
 - [ ] **4.4 Commentary Logging & Energy Scoring**
   - **Details:** Capture Gemini text outputs in `CommentaryTracker`. Score >0.75 if keywords ("UNBELIEVABLE") appear.
   - **Validation:** parameterized `pytest` running multiple raw sentences to verify `is_highlight` boolean outputs.

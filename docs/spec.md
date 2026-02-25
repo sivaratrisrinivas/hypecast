@@ -104,7 +104,7 @@ Phone (Camera)                  System                          Laptop (Spectato
 | ---------------------- | ------------------------------------------------- | ------------------------------------ | ----------------------------- |
 | **Stream**             | `getstream.Edge()`                                | WebRTC video/audio transport         | `STREAM_API_KEY` + `STREAM_API_SECRET` |
 | **Gemini**             | `gemini.Realtime(fps=3)`                          | Vision AI — frame analysis, commentary generation | `GOOGLE_API_KEY`             |
-| **ElevenLabs**         | `elevenlabs.TTS(voice_id="Anr9GtYh2VRXxiPplzxM")`| Text-to-speech — ESPN commentator voice (Chris) | `ELEVENLABS_API_KEY`         |
+| **ElevenLabs**         | `elevenlabs.TTS(voice_id="Chris")` (env-overridable) | Text-to-speech — ESPN commentator voice (Chris) | `ELEVENLABS_API_KEY`, optional `ELEVENLABS_VOICE_ID` |
 | **Roboflow / RF-DETR** | `rfdetr` + custom `VideoProcessor`               | Local object detection (RF-DETR), no API key | None (runs locally)          |
 | **Google Cloud Storage** | `google-cloud-storage` Python SDK               | Temporary video + reel storage       | GCP service account            |
 
@@ -657,6 +657,7 @@ Lifecycle rule: delete objects older than 48 hours.
 | **Frame capture**          | FrameWriter flush to mock upload buffer; WebM encoding                       | `backend/tests/test_frame_capture.py`   |
 | **RF-DETR Detection**      | JSON payload (person/ball bboxes) and latest state exposure to the agent    | `backend/tests/test_rfdetr_detection.py`|
 | **Gemini Realtime Wiring** | `gemini.Realtime(model="gemini-2.5-flash", fps=3)` + ESPN system prompt      | `backend/tests/test_gemini_realtime.py` |
+| **ElevenLabs TTS Integration** | ElevenLabs TTS wired into the Agent with Chris voice by default; text chunks produce audio buffers | `backend/tests/test_elevenlabs_tts.py` |
 | **Commentary Tracker**     | Energy scoring from text, highlight keyword detection, threshold logic       | `backend/tests/test_commentary_tracker.py` |
 | **Reel Generator**         | Highlight sorting, time window overlap removal, FFmpeg command construction (mocked) | `backend/tests/test_reel_generator.py` |
 | **Session Store**          | Session create/store/status (covered by sessions API tests)                  | `backend/tests/test_sessions_api.py`    |
@@ -732,6 +733,7 @@ GOOGLE_APPLICATION_CREDENTIALS=    # GCS service account JSON path
 
 # --- ElevenLabs ---
 ELEVENLABS_API_KEY=
+ELEVENLABS_VOICE_ID=Chris        # optional, override default Chris voice
 
 # --- App ---
 NEXT_PUBLIC_STREAM_API_KEY=        # exposed to frontend

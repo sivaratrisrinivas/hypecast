@@ -107,6 +107,7 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
     eleven_api_key = os.environ.get("ELEVENLABS_API_KEY")
     if not eleven_api_key:
         logging.warning("ELEVENLABS_API_KEY not set; ElevenLabs TTS will not output audio.")
+    eleven_voice_id = os.environ.get("ELEVENLABS_VOICE_ID", "Chris")
 
     # Stream Edge reads STREAM_API_KEY / STREAM_API_SECRET from env
     edge = getstream.Edge()
@@ -121,7 +122,7 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
 
     tts = elevenlabs.TTS(
         api_key=eleven_api_key,
-        voice_id="Anr9GtYh2VRXxiPplzxM",
+        voice_id=eleven_voice_id,
     )
 
     # Frame capture: save incoming WebRTC frames to GCS raw.webm (path set in join_call).
