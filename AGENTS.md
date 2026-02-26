@@ -15,6 +15,13 @@ Hypecast is a two-service app (Next.js frontend + Python/FastAPI backend). See `
 
 The backend can also be started via `uv run agent.py serve --host 0.0.0.0 --port 8000` which wraps the FastAPI app inside the Vision Agents Runner (requires `GOOGLE_API_KEY`, `STREAM_API_KEY`, `STREAM_API_SECRET`). For local dev/testing without external API keys, the simpler `uvicorn app.main:app` works for API endpoints.
 
+### Agent Pipeline Stack
+
+The agent uses:
+- `gemini.Realtime(fps=3)` — real-time speech-to-speech with video frames via WebSocket
+- `RFDetrDetectionProcessor(fps=5)` — RF-DETR local player/ball detection (downloads ~370MB model weights on first run)
+- `elevenlabs.TTS` — ElevenLabs Chris voice for high-quality TTS fallback
+
 ### Lint / Test / Build
 
 See `README.md` "Check code quality" section. Quick reference:
@@ -33,3 +40,4 @@ See `README.md` "Check code quality" section. Quick reference:
 - `uv` must be on `$PATH`. It installs to `~/.local/bin` — the update script handles this via `PATH` export.
 - Python 3.12 is required (`.python-version` in `backend/`). The system Python 3.12.3 works fine.
 - External API keys (`STREAM_API_KEY`, `STREAM_API_SECRET`, `GOOGLE_API_KEY`, `ELEVENLABS_API_KEY`) are only needed for full agent pipeline (live commentary). The FastAPI server, tests, and frontend all work without them.
+- The `rfdetr` package downloads ~370MB model weights (`rf-detr-base.pth`) on first import. These are gitignored. The download happens during `create_agent()` and is cached locally after the first run.
