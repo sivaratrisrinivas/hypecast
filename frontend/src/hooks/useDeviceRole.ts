@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { DeviceRole } from "@/types/session";
+import type { DeviceRole } from "@/src/types/session";
 
 type UseDeviceRoleResult = {
   role: DeviceRole | null;
@@ -36,20 +36,25 @@ export function useDeviceRole(options?: DetectionOptions): UseDeviceRoleResult {
     // 1. URL param override
     const url = new URL(window.location.href);
     const paramRole = options?.initialRoleParam ?? url.searchParams.get("role");
+    console.log("[useDeviceRole] URL param role:", paramRole, "| initialRoleParam:", options?.initialRoleParam);
     if (paramRole === "camera" || paramRole === "spectator") {
       resolvedRole = paramRole;
+      console.log("[useDeviceRole] Role from URL param:", resolvedRole);
     }
 
     // 2. Screen-width heuristic if not set yet
     if (!resolvedRole) {
       const width = window.innerWidth || document.documentElement.clientWidth;
+      console.log("[useDeviceRole] No URL param; using screen width heuristic. width:", width);
       if (width <= 768) {
         resolvedRole = "camera";
       } else {
         resolvedRole = "spectator";
       }
+      console.log("[useDeviceRole] Resolved role from screen width:", resolvedRole);
     }
 
+    console.log("[useDeviceRole] Final resolved role:", resolvedRole);
     queueMicrotask(() => {
       setRole(resolvedRole);
       setIsLoading(false);

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections import defaultdict
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class CommentaryHub:
@@ -35,10 +38,16 @@ class CommentaryHub:
     async def publish(self, session_id: str, payload: dict[str, Any]) -> None:
         async with self._lock:
             subs = list(self._subscribers.get(session_id, set()))
+        logger.info(
+            "[commentary_hub] publish session=%s subscribers=%d payload_text=%.60s...",
+            session_id, len(subs), payload.get("text", ""),
+        )
         if not subs:
+            logger.warning("[commentary_hub] No subscribers for session %s — commentary dropped.", session_id)
             return
         for q in subs:
             if q.full():
+                logger.warning("[commentary_hub] Queue full for session %s — dropping oldest entry.", session_id)
                 try:
                     _ = q.get_nowait()
                 except asyncio.QueueEmpty:
@@ -53,9 +62,11 @@ class CommentaryHub:
         """
         Fire-and-forget helper for sync contexts (e.g. TTS synthesize wrapper).
         """
+        logger.info("[commentary_hub] publish_nowait session=%s text=%.60s...", session_id, payload.get("text", ""))
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
+            logger.warning("[commentary_hub] No running loop — publish_nowait dropped.")
             # No running loop: nothing to deliver to; best-effort only.
             return
         loop.create_task(self.publish(session_id, payload))

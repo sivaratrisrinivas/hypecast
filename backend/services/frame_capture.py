@@ -1,5 +1,7 @@
 """Frame capture pipeline: encode incoming video frames to WebM and upload to GCS."""
 
+# ruff: noqa: I001
+
 import io
 import logging
 from typing import Callable
@@ -115,7 +117,10 @@ class FrameCaptureProcessor(VideoProcessor):
 
         shared_forwarder.add_frame_handler(on_frame, fps=self._fps, name=self.name)
         self._handler_added = True
-        logger.info("[frame_capture] Capturing frames to %s", self._output_blob_path or "(path not set)")
+        logger.info(
+            "[SPRINT 3] Frame capture pipeline active; capturing to %s",
+            self._output_blob_path or "(path not set)",
+        )
 
     async def stop_processing(self) -> None:
         if not self._handler_added or self._forwarder is None or self._writer is None:
@@ -124,8 +129,13 @@ class FrameCaptureProcessor(VideoProcessor):
         def upload(data: bytes) -> None:
             if self._output_blob_path:
                 from services.gcs import upload_blob
+
                 upload_blob(self._output_blob_path, data)  # noqa: PLC0415
-                logger.info("[frame_capture] Uploaded %d bytes to %s", len(data), self._output_blob_path)
+                logger.info(
+                    "[SPRINT 3] Frame capture flush: uploaded %d bytes to GCS %s",
+                    len(data),
+                    self._output_blob_path,
+                )
 
         self._writer.flush(upload_callback=upload)
         self._writer = None

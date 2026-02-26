@@ -8,7 +8,8 @@ import {
   useStreamVideoClient,
   useCallStateHooks,
 } from "@stream-io/video-react-sdk";
-import type { SessionStatus } from "@/types/session";
+import type { SessionStatus } from "@/src/types/session";
+import { CommentaryTranscript } from "./CommentaryTranscript";
 
 const CALL_TYPE = "default";
 
@@ -32,6 +33,18 @@ const STATUS_LABELS: Record<SessionStatus, string> = {
 function SpectatorCallContent() {
   const { useRemoteParticipants } = useCallStateHooks();
   const remoteParticipants = useRemoteParticipants();
+  const [audioEnabled, setAudioEnabled] = useState(false);
+
+  const handleEnableAudio = () => {
+    // Unlocking browser autoplay policy
+    try {
+      const ctx = new AudioContext();
+      ctx.resume();
+    } catch (e) {
+      console.warn("[SpectatorCallContent] AudioContext unlock failed:", e);
+    }
+    setAudioEnabled(true);
+  };
 
   if (remoteParticipants.length === 0) {
     return (
@@ -43,13 +56,27 @@ function SpectatorCallContent() {
 
   return (
     <div className="flex w-full flex-col gap-4">
-      {remoteParticipants.map((participant) => (
-        <ParticipantView
-          key={participant.sessionId}
-          participant={participant}
-          className="aspect-video w-full overflow-hidden rounded-xl bg-black"
-        />
-      ))}
+      {!audioEnabled && (
+        <button
+          type="button"
+          onClick={handleEnableAudio}
+          className="mx-auto rounded-full bg-emerald-500 px-6 py-2 text-sm font-semibold uppercase tracking-wide text-black hover:bg-emerald-400 transition-colors"
+        >
+          🔊 Enable Audio
+        </button>
+      )}
+      {audioEnabled && (
+        <div className="space-y-4">
+          <p className="text-center text-xs text-emerald-400 font-medium">🔊 Audio active</p>
+          {remoteParticipants.map((participant) => (
+            <ParticipantView
+              key={participant.sessionId}
+              participant={participant}
+              className="aspect-video w-full overflow-hidden rounded-xl bg-black shadow-2xl border border-neutral-800"
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -70,7 +97,9 @@ export function SpectatorView({
   const label = STATUS_LABELS[status];
 
   useEffect(() => {
+    console.log("[SpectatorView] Effect triggered. client:", !!client, "streamCallId:", streamCallId, "status:", status);
     if (!client || !streamCallId) {
+      console.log("[SpectatorView] Missing client or streamCallId — not joining. client:", !!client, "streamCallId:", streamCallId);
       setCallReady(false);
       callRef.current = null;
       return;
@@ -78,21 +107,24 @@ export function SpectatorView({
     let cancelled = false;
     const call = client.call(CALL_TYPE, streamCallId);
     callRef.current = call;
-    if (process.env.NODE_ENV === "development") {
-      console.debug("[SpectatorView] effect run: new call instance, joining once", streamCallId);
-    }
+    console.log("[SpectatorView] Created call instance for streamCallId:", streamCallId, "callType:", CALL_TYPE);
 
     const run = async () => {
       setIsJoining(true);
       setJoinError(null);
+      console.log("[SpectatorView] Attempting call.join({ create: false }) for streamCallId:", streamCallId);
       try {
         await call.join({ create: false });
+        console.log("[SpectatorView] call.join() SUCCESS for streamCallId:", streamCallId);
         if (cancelled) {
+          console.log("[SpectatorView] Join succeeded but effect was cancelled — leaving call.");
           await call.leave();
           return;
         }
         setCallReady(true);
+        console.log("[SpectatorView] callReady set to true. Call state:", call.state);
       } catch (err) {
+        console.error("[SpectatorView] call.join() FAILED for streamCallId:", streamCallId, "error:", err);
         if (!cancelled) {
           setJoinError(err instanceof Error ? err.message : "Failed to join");
         }
@@ -103,10 +135,11 @@ export function SpectatorView({
 
     run();
     return () => {
+      console.log("[SpectatorView] Effect cleanup — leaving call for streamCallId:", streamCallId);
       cancelled = true;
       callRef.current = null;
       setCallReady(false);
-      call.leave().catch(() => {});
+      call.leave().catch(() => { });
     };
   }, [client, streamCallId]);
 
@@ -136,6 +169,13 @@ export function SpectatorView({
         <StreamCall call={call}>
           <div className="w-full max-w-2xl px-4">
             <SpectatorCallContent />
+            <CommentaryTranscript
+              sessionId={
+                streamCallId
+                  ? streamCallId.replace(/^pickup-/, "")
+                  : null
+              }
+            />
           </div>
         </StreamCall>
       )}

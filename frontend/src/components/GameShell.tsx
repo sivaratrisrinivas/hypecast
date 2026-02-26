@@ -12,7 +12,7 @@ import { isSessionStatus, type SessionStatus } from "@/src/types/session";
 function getSpectatorStatusFromUrl(): SessionStatus {
   if (typeof window === "undefined") return "waiting";
   const p = new URL(window.location.href).searchParams.get("status");
-  return isSessionStatus(p ?? "") ? p : "waiting";
+  return isSessionStatus(p ?? "") ? (p as SessionStatus) : "waiting";
 }
 
 const STREAM_API_KEY = process.env.NEXT_PUBLIC_STREAM_API_KEY ?? "";
@@ -31,30 +31,45 @@ export function GameShell({ spectatorSessionId = null }: GameShellProps) {
     isLoading: spectatorLoading,
   } = useSpectatorSession(spectatorSessionId ?? null);
 
+  const sessionId = session?.sessionId ?? null;
+  const streamToken = session?.streamToken ?? null;
+
   const streamClient = useMemo(() => {
-    if (!session || typeof window === "undefined" || !STREAM_API_KEY) return null;
+    if (!sessionId || !streamToken || typeof window === "undefined" || !STREAM_API_KEY) {
+      console.log("[GameShell] streamClient: not creating (sessionId:", !!sessionId, "STREAM_API_KEY:", !!STREAM_API_KEY, ")");
+      return null;
+    }
+    console.log("[GameShell] Creating StreamVideoClient for camera user:", `camera-${sessionId}`);
     return StreamVideoClient.getOrCreateInstance({
       apiKey: STREAM_API_KEY,
-      user: { id: `camera-${session.sessionId}` },
-      token: session.streamToken,
+      user: { id: `camera-${sessionId}` },
+      token: streamToken,
     });
-  }, [session?.sessionId, session?.streamToken]);
+  }, [sessionId, streamToken]);
+
+  const spectatorUserId = spectatorSession?.userId ?? null;
+  const spectatorToken = spectatorSession?.streamToken ?? null;
+  const spectatorCallId = spectatorSession?.streamCallId ?? null;
 
   const spectatorClient = useMemo(() => {
-    if (!spectatorSession || typeof window === "undefined" || !STREAM_API_KEY) return null;
+    if (!spectatorUserId || !spectatorToken || typeof window === "undefined" || !STREAM_API_KEY) {
+      console.log("[GameShell] spectatorClient: not creating (spectatorUserId:", !!spectatorUserId, "STREAM_API_KEY:", !!STREAM_API_KEY, ")");
+      return null;
+    }
+    console.log("[GameShell] Creating StreamVideoClient for spectator user:", spectatorUserId, "callId:", spectatorCallId);
     return StreamVideoClient.getOrCreateInstance({
       apiKey: STREAM_API_KEY,
-      user: { id: spectatorSession.userId },
-      token: spectatorSession.streamToken,
+      user: { id: spectatorUserId },
+      token: spectatorToken,
     });
-  }, [spectatorSession?.userId, spectatorSession?.streamToken]);
+  }, [spectatorUserId, spectatorToken]);
 
   const cameraClientRef = useRef<StreamVideoClient | null>(null);
   useEffect(() => {
     if (!streamClient) return;
     const prev = cameraClientRef.current;
     if (prev && prev !== streamClient) {
-      prev.disconnectUser().catch(() => {});
+      prev.disconnectUser().catch(() => { });
     }
     cameraClientRef.current = streamClient;
     return () => {
@@ -67,7 +82,7 @@ export function GameShell({ spectatorSessionId = null }: GameShellProps) {
     if (!spectatorClient) return;
     const prev = spectatorClientRef.current;
     if (prev && prev !== spectatorClient) {
-      prev.disconnectUser().catch(() => {});
+      prev.disconnectUser().catch(() => { });
     }
     spectatorClientRef.current = spectatorClient;
     return () => {
@@ -84,6 +99,7 @@ export function GameShell({ spectatorSessionId = null }: GameShellProps) {
   }
 
   if (role === "camera") {
+    console.log("[GameShell] Rendering CAMERA view. session:", !!session, "streamClient:", !!streamClient, "streamCallId:", session?.streamCallId);
     const joinUrl = session
       ? `${typeof window !== "undefined" ? window.location.origin : ""}${session.joinUrl}`
       : null;
@@ -126,6 +142,7 @@ export function GameShell({ spectatorSessionId = null }: GameShellProps) {
     );
   }
 
+  console.log("[GameShell] Rendering SPECTATOR view. spectatorSessionId:", spectatorSessionId, "spectatorSession:", !!spectatorSession, "spectatorClient:", !!spectatorClient, "spectatorStatus:", spectatorSession?.status);
   const spectatorStatus = spectatorSession?.status ?? getSpectatorStatusFromUrl();
   const spectatorView = (
     <SpectatorView

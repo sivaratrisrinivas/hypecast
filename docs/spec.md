@@ -22,7 +22,7 @@
 
 1. **One-tap start** — user opens the web app, taps START, and commentary begins within 3 seconds.
 2. **Two-device model** — phone is the camera, laptop/tablet is the spectator speaker. Same URL, auto-detected role.
-3. **Real-time AI commentary** — Gemini Realtime watches sampled frames, generates play-by-play text, ElevenLabs speaks it.
+3. **Real-time AI commentary** — Gemini VLM watches sampled frames, generates play-by-play text; ElevenLabs STT (optional user speech) and ElevenLabs TTS speaks it (with commentary fallback).
 4. **Auto highlight reel** — after the game, AI picks 3–5 best moments, FFmpeg stitches them with commentary audio into a shareable MP4.
 5. **Zero configuration** — no accounts, no sport selection, no player names. AI figures it out from video.
 
@@ -103,7 +103,7 @@ Phone (Camera)                  System                          Laptop (Spectato
 | Service                | SDK / Integration                                 | Purpose                              | Auth                          |
 | ---------------------- | ------------------------------------------------- | ------------------------------------ | ----------------------------- |
 | **Stream**             | `getstream.Edge()`                                | WebRTC video/audio transport         | `STREAM_API_KEY` + `STREAM_API_SECRET` |
-| **Gemini**             | `gemini.Realtime(fps=3)`                          | Vision AI — frame analysis, commentary generation | `GOOGLE_API_KEY`             |
+| **Gemini**             | `gemini.VLM(fps=3)` + ElevenLabs STT/TTS           | Vision AI — frame analysis, commentary generation | `GOOGLE_API_KEY`             |
 | **ElevenLabs**         | `elevenlabs.TTS(voice_id="Chris")` (env-overridable) | Text-to-speech — ESPN commentator voice (Chris) | `ELEVENLABS_API_KEY`, optional `ELEVENLABS_VOICE_ID` |
 | **Roboflow / RF-DETR** | `rfdetr` + custom `VideoProcessor`               | Local object detection (RF-DETR), no API key | None (runs locally)          |
 | **Google Cloud Storage** | `google-cloud-storage` Python SDK               | Temporary video + reel storage       | GCP service account            |
@@ -287,7 +287,7 @@ sessions: dict[str, GameSession] = {}
 │  Next.js PWA │                                  │  ┌───────────────────────┐  │
 └──────────────┘                                  │  │  Vision Agents Server │  │
                                                   │  │                       │  │
-┌──────────────┐         WebRTC Audio (Stream)    │  │  Gemini Realtime ───┐ │  │
+┌──────────────┐         WebRTC Audio (Stream)    │  │  Gemini VLM ────────┐ │  │
 │  Laptop      │ ◀──────────────────────────────  │  │  (3fps vision)     │ │  │
 │  (Spectator) │                                  │  │       ▼            │ │  │
 │  Next.js PWA │                                  │  │  ElevenLabs TTS    │ │  │
@@ -420,7 +420,7 @@ hypecast/
 │       ├── test_models.py
 │       ├── test_sessions_api.py        # POST/GET sessions, GET token
 │       ├── test_rfdetr_detection.py    # RF-DETR JSON payload + processor state (Sprint 4.1–4.2)
-│       ├── test_gemini_realtime.py     # Gemini Realtime wiring + ESPN prompt (Sprint 4.2)
+│       ├── test_gemini_realtime.py     # Gemini VLM wiring + ESPN prompt (Sprint 4.2)
 │       ├── test_commentary_tracker.py  # (Sprint 4)
 │       └── test_reel_generator.py      # (Sprint 5)
 │
@@ -436,7 +436,7 @@ Phone Camera (30fps)
      ▼
 Stream Edge Network (WebRTC SFU)
      │
-     ├──▶ Gemini Realtime (3fps sampled)
+     ├──▶ Gemini VLM (3fps sampled)
      │       │  Receives video frames + Roboflow annotations
      │       │  Maintains game context across frames
      │       │  Outputs commentary text continuously
@@ -596,7 +596,7 @@ async def create_agent(**kwargs) -> Agent:
     Factory called by AgentLauncher.
     Returns a configured Agent with:
       - getstream.Edge() for video transport
-      - gemini.Realtime(fps=3) for vision LLM
+      - gemini.VLM(fps=3) for vision LLM; ElevenLabs STT + TTS so fallback runs
       - elevenlabs.TTS(voice_id=CHRIS) for speech
       - RF-DETR-based VideoProcessor for object detection (5fps, person/ball)
     """
@@ -656,10 +656,10 @@ Lifecycle rule: delete objects older than 48 hours.
 
 - **Runner does not issue Stream tokens.** The spec previously implied a single “create session” response with `stream_token` and `join_url`. In reality, the Runner’s POST `/sessions` only returns `session_id`, `call_id`, `session_started_at`. Our app must expose a separate endpoint (e.g. POST `/api/session` or GET `/api/sessions/{id}/token`) that uses the Stream server-side SDK to create a user token; the frontend uses that token to create/join the call, then POSTs to Runner’s `/sessions` with the same `call_id`.
 - **Session end:** Use Runner’s **POST `/sessions/{session_id}/close`** (or DELETE) when the user taps END so the agent leaves the call; our app then runs reel generation and updates app-level session state.
-- **Gemini Realtime:** Default model in Vision Agents is `gemini-2.5-flash`; `fps` default is 1 — we use `fps=3` via `gemini.Realtime(model="gemini-2.5-flash", fps=3)` and feed it both Stream frames and RF-DETR detection state. Docs: [Gemini integration](https://visionagents.ai/integrations/gemini).
+- **Gemini VLM:** We use `gemini.VLM(model="gemini-3-flash-preview", fps=3)` so the pipeline is vision → text → ElevenLabs TTS (not Realtime speech-to-speech); our TTS wrapper and commentary fallback run. ElevenLabs STT (Scribe v2) for user speech. Docs: [Gemini integration](https://visionagents.ai/integrations/gemini).
 - **Roboflow local:** `RoboflowLocalDetectionProcessor` default `model_id` is `"rfdetr-seg-preview"`; we use `"rfdetr-base"`. Options include `rfdetr-nano`, `rfdetr-base`, `rfdetr-large`. No API key. Docs: [Roboflow integration](https://visionagents.ai/integrations/roboflow).
 - **ElevenLabs:** Default `voice_id` in docs is `"VR6AewLTigWG4xSOukaG"`; we use Chris (`Anr9GtYh2VRXxiPplzxM`). Docs: [ElevenLabs integration](https://visionagents.ai/integrations/elevenlabs).
-- **Realtime + custom TTS:** With `gemini.Realtime(fps=3)` we use ElevenLabs for TTS (custom voice). The Realtime class supports “direct audio” when the model does speech natively; for custom voices we keep the pipeline: Realtime (vision + text) → ElevenLabs TTS → Stream audio.
+- **(Obsolete) Realtime + custom TTS:** We now use VLM + STT/TTS instead so our fallback runs. The Realtime class supports “direct audio” when the model does speech natively; for custom voices we keep the pipeline: Realtime (vision + text) → ElevenLabs TTS → Stream audio.
 
 ---
 
@@ -673,7 +673,7 @@ Lifecycle rule: delete objects older than 48 hours.
 | **GCS**                    | Signed URL and upload_blob (mocked `google.cloud.storage`)                 | `backend/tests/test_gcs.py`             |
 | **Frame capture**          | FrameWriter flush to mock upload buffer; WebM encoding                       | `backend/tests/test_frame_capture.py`   |
 | **RF-DETR Detection**      | JSON payload (person/ball bboxes) and latest state exposure to the agent    | `backend/tests/test_rfdetr_detection.py`|
-| **Gemini Realtime Wiring** | `gemini.Realtime(model="gemini-2.5-flash", fps=3)` + ESPN system prompt      | `backend/tests/test_gemini_realtime.py` |
+| **Gemini VLM + STT/TTS**   | `gemini.VLM(model="gemini-3-flash-preview", fps=3)` + ElevenLabs STT/TTS + ESPN prompt | `backend/tests/test_gemini_realtime.py` |
 | **ElevenLabs TTS Integration** | ElevenLabs TTS wired into the Agent with Chris voice by default; text chunks produce audio buffers | `backend/tests/test_elevenlabs_tts.py` |
 | **Commentary Tracker**     | Energy scoring from text, highlight keyword detection, threshold logic       | `backend/tests/test_commentary_tracker.py` |
 | **Reel Generator**         | Highlight sorting, time window overlap removal, FFmpeg command construction (mocked) | `backend/tests/test_reel_generator.py` |

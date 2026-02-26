@@ -1,9 +1,12 @@
+"""Commentary tracking and energy scoring utilities."""
+
+# ruff: noqa: I001
+
 from __future__ import annotations
 
-import logging
 from dataclasses import asdict
 from datetime import datetime, timezone
-from typing import Any
+import logging
 
 from models import CommentaryEntry, ENERGY_THRESHOLD, HIGHLIGHT_KEYWORDS
 from services.store import sessions
@@ -29,6 +32,7 @@ class CommentaryTracker:
     ) -> None:
         self._keywords = [k.upper() for k in (highlight_keywords or HIGHLIGHT_KEYWORDS)]
         self._threshold = energy_threshold
+        self._sessions_logged: set[str] = set()
 
     @property
     def energy_threshold(self) -> float:
@@ -99,11 +103,18 @@ class CommentaryTracker:
             is_highlight=is_highlight,
         )
         session.commentary_log.append(entry)
-
-        logger.debug(
-            "[commentary_tracker] Recorded commentary for session %s: %s",
+        if session_id not in self._sessions_logged:
+            self._sessions_logged.add(session_id)
+            logger.info(
+                "[SPRINT 4] CommentaryTracker: first commentary recorded (energy scoring + highlight flagging) for session %s",
+                session_id,
+            )
+        logger.info(
+            "[commentary_tracker] Recorded: session=%s energy=%.2f highlight=%s text=%.60s...",
             session_id,
-            {**asdict(entry), "session_id": session_id},
+            entry.energy_level,
+            entry.is_highlight,
+            entry.text,
         )
         return entry
 

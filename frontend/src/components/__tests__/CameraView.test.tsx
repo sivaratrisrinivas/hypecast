@@ -64,15 +64,15 @@ describe("CameraView", () => {
     render(
       <CameraView
         onStart={vi.fn()}
-        streamVideoClient={mockClient as import("@stream-io/video-react-sdk").StreamVideoClient}
+        streamVideoClient={mockClient as unknown as import("@stream-io/video-react-sdk").StreamVideoClient}
         streamCallId="test-call-id"
       />
     );
 
     await waitFor(() => {
       expect(call).toHaveBeenCalledWith("default", "test-call-id");
-    });
-    expect(cameraEnable).toHaveBeenCalled();
-    expect(join).toHaveBeenCalledWith({ create: true });
+      expect(join).toHaveBeenCalledWith({ create: true });
+      expect(cameraEnable).toHaveBeenCalled();
+    }, { timeout: 3000 });
   });
 });

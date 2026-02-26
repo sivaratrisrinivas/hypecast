@@ -1,10 +1,13 @@
 """GCS client and signed URL generation for session recordings and reels."""
 
+import logging
 import os
 from datetime import datetime, timedelta, timezone
 
 DEFAULT_BUCKET = "hypecast-media"
 REEL_EXPIRATION_SECONDS = 48 * 3600  # 48 hours
+
+_log = logging.getLogger(__name__)
 
 
 def upload_blob(
@@ -27,6 +30,7 @@ def upload_blob(
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(blob_name)
     blob.upload_from_string(data, content_type="video/webm")
+    _log.info("[SPRINT 3] GCS upload_blob: %s (%d bytes)", blob_name, len(data))
 
 
 def get_bucket_name() -> str:
@@ -60,8 +64,10 @@ def generate_signed_url(
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(blob_name)
     expiration = datetime.now(timezone.utc) + timedelta(seconds=expiration_seconds)
-    return blob.generate_signed_url(
+    url = blob.generate_signed_url(
         expiration=expiration,
         method=method,
         version="v4",
     )
+    _log.info("[SPRINT 3] GCS generate_signed_url: %s (expires %ds)", blob_name, expiration_seconds)
+    return url

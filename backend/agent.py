@@ -8,19 +8,26 @@ from typing import Any
 
 from dotenv import load_dotenv
 from vision_agents.core import Agent, AgentLauncher, Runner, User
-from vision_agents.core.edge.events import CallEndedEvent
+from vision_agents.core.llm.events import VLMInferenceCompletedEvent
 from vision_agents.plugins import elevenlabs, gemini, getstream
 
 from app.main import app as api_app
 from models.session import SessionStatus
+from services.commentary_hub import commentary_hub
+from services.commentary_tracker import commentary_tracker
 from services.frame_capture import FrameCaptureProcessor
 from services.rfdetr_detection import RFDetrDetectionProcessor
 from services.store import sessions
-from services.tts_fallback import wrap_tts_with_fallback
 
 # Load .env from backend dir (where agent.py runs)
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 logging.basicConfig(level=logging.INFO)
+
+# File-based logging so we can read errors even when terminal reads fail
+_file_handler = logging.FileHandler("/tmp/agent_debug.log", mode="w")
+_file_handler.setLevel(logging.DEBUG)
+_file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+logging.getLogger().addHandler(_file_handler)
 
 # Apply 60s iat skew to getstream token creation so agent join tokens are accepted
 # when server clock is ahead of Stream's (avoids "token used before issue at (iat)").
@@ -87,12 +94,24 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
 
     This wires the real pipeline:
       - Edge transport via Stream (`getstream.Edge`)
-      - Gemini Realtime vision LLM
-      - ElevenLabs TTS
-      - Roboflow local detection processor
+      - Gemini VLM (vision) + ElevenLabs STT + ElevenLabs TTS
+      - Frame capture and RF-DETR detection processors
     """
+    logging.getLogger(__name__).info(
+        "[SPRINT 3] Agent factory: Runner + frame capture + GCS path configured."
+    )
+    logging.getLogger(__name__).info(
+        "[SPRINT 4] Agent factory: Gemini Realtime + RF-DETR + commentary pipeline configured."
+    )
     stream_api_key = os.environ.get("STREAM_API_KEY")
     stream_api_secret = os.environ.get("STREAM_API_SECRET")
+    logging.getLogger(__name__).info(
+        "[create_agent] Env vars: STREAM_API_KEY=%s, STREAM_API_SECRET=%s, GOOGLE_API_KEY=%s, ROBOFLOW_API_KEY=%s, ELEVENLABS_API_KEY=%s",
+        bool(stream_api_key), bool(stream_api_secret),
+        bool(os.environ.get("GOOGLE_API_KEY")),
+        bool(os.environ.get("ROBOFLOW_API_KEY")),
+        bool(os.environ.get("ELEVENLABS_API_KEY")),
+    )
     if not stream_api_key or not stream_api_secret:
         logging.warning(
             "STREAM_API_KEY/STREAM_API_SECRET not set; Edge transport will likely fail.",
@@ -101,34 +120,69 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
     google_api_key = os.environ.get("GOOGLE_API_KEY", "").strip()
     if not google_api_key:
         raise RuntimeError(
-            "GOOGLE_API_KEY is not set. Set it in backend/.env or the environment. "
-            "Without it the agent will spam 'Gemini Session is not established' and produce no commentary."
+            "GOOGLE_API_KEY is not set; Gemini VLM commentary is disabled."
         )
 
-    eleven_api_key = os.environ.get("ELEVENLABS_API_KEY")
-    if not eleven_api_key:
-        logging.warning("ELEVENLABS_API_KEY not set; ElevenLabs TTS will not output audio.")
-    eleven_voice_id = os.environ.get("ELEVENLABS_VOICE_ID", "Chris")
+    elevenlabs_api_key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
+    if not elevenlabs_api_key:
+        logging.warning(
+            "ELEVENLABS_API_KEY not set; ElevenLabs TTS will be disabled or limited.",
+        )
 
     # Stream Edge reads STREAM_API_KEY / STREAM_API_SECRET from env
     edge = getstream.Edge()
 
-    # Gemini Realtime text model; audio is handled by ElevenLabs TTS (Sprint 4.3).
-    # See https://visionagents.ai/integrations/gemini for reference.
-    llm = gemini.Realtime(
-        model="gemini-2.5-flash",
+    # Sprint 4.2: Gemini VLM (vision -> text)
+    # Using 'gemini-3-flash-preview' as per spec.md (default in vision-agents)
+    llm = gemini.VLM(
+        model="gemini-3-flash-preview",
         fps=3,
         api_key=google_api_key,
     )
-
-    tts = elevenlabs.TTS(
-        api_key=eleven_api_key,
-        voice_id=eleven_voice_id,
+    logging.getLogger(__name__).info(
+        "[create_agent] LLM configured: gemini.VLM(fps=3). vision -> text pipeline active."
     )
 
-    # Frame capture: save incoming WebRTC frames to GCS raw.webm (path set in join_call).
+    # Sprint 4.3: ElevenLabs TTS (text -> speech)
+    # Using 'Chris' UUID: Anr9GtYh2VRXxiPplzxM
+    voice_id = os.environ.get("ELEVENLABS_VOICE_ID", "Anr9GtYh2VRXxiPplzxM")
+    tts = elevenlabs.TTS(
+        api_key=elevenlabs_api_key,
+        voice_id=voice_id,
+    )
+
+    # Sprint 4.5: Graceful Degradation / Fallback
+    from services.tts_fallback import wrap_tts_with_fallback
+    wrap_tts_with_fallback(
+        tts,
+        session_id_provider=lambda: getattr(agent, "_session_id", None),
+        tracker=commentary_tracker,
+    )
+    logging.getLogger(__name__).info(
+        "[create_agent] TTS configured: elevenlabs.TTS(voice_id=%s) with fallback wrapper.",
+        voice_id,
+    )
+
+    roboflow_api_key = os.environ.get("ROBOFLOW_API_KEY")
+    if not roboflow_api_key:
+        raise RuntimeError("ROBOFLOW_API_KEY is not set; required for hosted inference.")
+
+    # Use cloud inference instead of local inference to save memory
+    from services.rfdetr_detection import RoboflowCloudDetector
+    roboflow_model = RoboflowCloudDetector(
+        api_key=roboflow_api_key,
+        model_id="football-players-detection-3zvbc/1"
+    )
+
+    # Frame capture: save incoming WebRTC frames to GCS
     frame_capture = FrameCaptureProcessor(fps=15)
-    detection = RFDetrDetectionProcessor(fps=5, threshold=0.5)
+
+    # Pass cloud model to our custom processor
+    detection = RFDetrDetectionProcessor(
+        fps=5,
+        threshold=0.5,
+        model=roboflow_model
+    )
     processors: list[Any] = [frame_capture, detection]
 
     agent_user = User(id="hypecast-agent", name="Hypecast Commentator")
@@ -141,7 +195,12 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
         instructions=ESPN_SYSTEM_PROMPT,
         processors=processors,
         streaming_tts=True,
-        broadcast_metrics=True,
+    )
+    logging.getLogger(__name__).info(
+        "[create_agent] Agent created. edge=%s, llm=%s, processors=%s, agent_user=%s",
+        type(edge).__name__, type(llm).__name__,
+        [type(p).__name__ for p in processors],
+        agent_user.id,
     )
 
     return agent
@@ -149,75 +208,78 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
 
 async def join_call(agent: Agent, call_type: str, call_id: str, **kwargs: Any) -> None:
     """
-    Called when the agent should join a call.
-
-    This function:
-      - Creates/joins the Stream call via Edge
-      - Joins the call with the Agent
-      - Runs until the call ends, then cleans up
+    Lifecycle hook called by AgentLauncher when a new session starts.
     """
-    logging.info("[join_call] Joining call_id=%s call_type=%s", call_id, call_type)
+    t0 = time.monotonic()
+    logger = logging.getLogger(__name__)
+    logger.info("[join_call] START call_id=%s call_type=%s", call_id, call_type)
 
-    # Register the agent user with Stream and set edge.agent_user_id so create_call can send created_by_id.
-    await agent.create_user()
-    # Create or fetch the Stream call via Edge (requires agent_user_id for server-side auth).
-    call = await agent.edge.create_call(call_id=call_id, call_type=call_type)  # type: ignore[arg-type]
-
-    # Set GCS path for frame capture before join so raw.webm is written to sessions/{session_id}/raw.webm.
+    # Derive session_id from call_id
     session_id = call_id.removeprefix("pickup-") if call_id.startswith("pickup-") else None
-    if session_id:
-        # Expose the logical session_id on the agent so downstream helpers
-        # (e.g. TTS fallback / commentary tracking) can resolve it.
-        setattr(agent, "_session_id", session_id)
+    logger.info(
+        "[join_call] session_id=%s known_sessions=%s",
+        session_id, list(sessions.keys()),
+    )
 
-        for p in agent.processors:
-            if isinstance(p, FrameCaptureProcessor):
-                p.set_output_blob_path(f"sessions/{session_id}/raw.webm")
-                break
-        for p in agent.processors:
-            if isinstance(p, RFDetrDetectionProcessor):
-                p.set_session_id(session_id)
-                break
-
-        # Wrap ElevenLabs TTS so that:
-        #   - all commentary text is logged via CommentaryTracker
-        #   - failures trigger graceful fallback over WebSockets
-        tts = getattr(agent, "tts", None)
-        if tts is not None:
-            wrap_tts_with_fallback(tts, session_id_provider=lambda: getattr(agent, "_session_id", None))
-
-    # Establish Gemini (or other Realtime LLM) session before edge.join().
-    # The agent's normal join() does llm.connect() then edge.join(); we must do the same or
-    # video frames are sent before _real_session exists and we get "Gemini Session is not established yet".
-    if hasattr(agent.llm, "connect") and callable(agent.llm.connect):
-        await agent.llm.connect()
-        logging.info("[join_call] Realtime LLM connected.")
-
-    # Join call and run until completion.
-    # StreamConnection has no .wait(); we wait for CallEndedEvent from the edge instead.
-    connection = await agent.edge.join(agent, call)
-    # Mark app session LIVE so frontend polling stops showing "Awaiting connection...".
-    if session_id and session_id in sessions:
-        sessions[session_id].status = SessionStatus.LIVE
-        logging.info("[join_call] Session %s set to LIVE.", session_id)
-    logging.info("[join_call] Agent joined call; waiting for call to end.")
-
-    call_ended = asyncio.Event()
-    max_wait = 300.0  # match max_session_duration_seconds
-
-    async def on_call_ended(_event: CallEndedEvent):
-        call_ended.set()
-
-    agent.edge.events.subscribe(on_call_ended)
     try:
-        try:
-            await asyncio.wait_for(call_ended.wait(), timeout=max_wait)
-        except asyncio.TimeoutError:
-            logging.info("[join_call] Max session duration reached; ending call.")
-    finally:
-        agent.edge.events.unsubscribe(on_call_ended)
-        logging.info("[join_call] Call finished; closing agent and edge transport.")
-        await agent.close()
+        # Configure processors for this session
+        if session_id:
+            setattr(agent, "_session_id", session_id)
+            for p in agent.processors:
+                if isinstance(p, FrameCaptureProcessor):
+                    p.set_output_blob_path(f"sessions/{session_id}/raw.webm")
+                    break
+            for p in agent.processors:
+                if isinstance(p, RFDetrDetectionProcessor):
+                    p.set_session_id(session_id)
+                    break
+
+        # Register agent user in Stream
+        logger.info("[join_call] Calling create_user()...")
+        await agent.create_user()
+        logger.info("[join_call] create_user() done in %.2fs", time.monotonic() - t0)
+
+        # Create the Stream call
+        logger.info("[join_call] Calling create_call(%s, %s)...", call_type, call_id)
+        call = await agent.create_call(call_type, call_id)
+        logger.info("[join_call] create_call() done in %.2fs", time.monotonic() - t0)
+
+        # Subscribe to Gemini's output for logging
+        async def _on_vlm_inference(event: VLMInferenceCompletedEvent):
+            if event.text:
+                logger.info("[vlm] Gemini said: %.60s...", event.text)
+
+        agent.subscribe(_on_vlm_inference)
+        logger.info("[join_call] VLM inference logger subscribed for session=%s", session_id)
+
+        # Join the call
+        logger.info("[join_call] Calling agent.join()...")
+        async with agent.join(call):
+            logger.info("[join_call] INSIDE agent.join() context — agent is connected!")
+
+            # Mark app session LIVE
+            if session_id and session_id in sessions:
+                sessions[session_id].status = SessionStatus.LIVE
+                logger.info("[join_call] Session %s set to LIVE.", session_id)
+            elif session_id:
+                logger.warning("[join_call] session_id=%s not in sessions store!", session_id)
+
+            # Kick-start commentary
+            logger.info("[join_call] Calling simple_response() to start commentary...")
+            await agent.simple_response(
+                "Start commentating on the live game you see. "
+                "Describe the action play-by-play like a sports broadcaster."
+            )
+            logger.info("[join_call] simple_response() done. Commentary active.")
+
+            # Block until call ends
+            logger.info("[join_call] Calling agent.finish()...")
+            await agent.finish()
+            logger.info("[join_call] agent.finish() returned — call ended.")
+
+    except Exception as e:
+        logger.error("[join_call] EXCEPTION: %s", e, exc_info=True)
+        raise
 
 
 runner = Runner(
@@ -229,13 +291,20 @@ runner = Runner(
         max_session_duration_seconds=300,
     ),
 )
+logging.getLogger(__name__).info(
+    "[SPRINT 3] Vision Agents Runner started (mounts FastAPI app, POST /sessions for agent join)."
+)
 
 # Mount the existing FastAPI app (which prefixes its own routes under `/api`)
 # at the root of the Vision Agents runner app.
 runner.fast_api.mount("/", api_app)
 for route in api_app.routes:
     if hasattr(route, "path") and hasattr(route, "methods"):
-        logging.info("App route: %s %s", list(route.methods) if route.methods else "GET", route.path)
+        logging.info(
+            "App route: %s %s",
+            list(route.methods) if route.methods else "GET",
+            route.path,
+        )
 
 
 if __name__ == "__main__":

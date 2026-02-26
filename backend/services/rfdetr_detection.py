@@ -1,25 +1,75 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import io
+import json
+import logging
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from typing import Any, Iterable
 
 import numpy as np
 from av import VideoFrame
+from PIL import Image
 from vision_agents.core.processors import VideoProcessor
 from vision_agents.core.utils.video_forwarder import VideoForwarder
 
 from services.detections_hub import detections_hub
 
+_log = logging.getLogger(__name__)
 _COCO_PERSON = "person"
 _COCO_SPORTS_BALL = "sports ball"
 
 
 def _load_coco_classes() -> list[str]:
-    # Imported lazily so unit tests can run without importing rfdetr.
-    from rfdetr.util.coco_classes import COCO_CLASSES  # noqa: PLC0415
+    # Hardcoded to avoid depending on the rfdetr package (removed for memory savings).
+    return [
+        "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train",
+        "truck", "boat", "traffic light", "fire hydrant", "stop sign",
+        "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep",
+        "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella",
+        "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard",
+        "sports ball", "kite", "baseball bat", "baseball glove", "skateboard",
+        "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork",
+        "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
+        "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair",
+        "couch", "potted plant", "bed", "dining table", "toilet", "tv",
+        "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave",
+        "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase",
+        "scissors", "teddy bear", "hair drier", "toothbrush",
+    ]
 
-    return list(COCO_CLASSES)
+
+class RoboflowCloudDetector:
+    """Lightweight client for Roboflow Hosted Inference REST API."""
+    def __init__(self, api_key: str, model_id: str):
+        self.api_key = api_key
+        self.model_id = model_id
+        self.base_url = f"https://detect.roboflow.com/{model_id}"
+
+    def predict(self, image: Image.Image | np.ndarray, threshold: float = 0.5) -> dict[str, Any]:
+        if isinstance(image, np.ndarray):
+            image = Image.fromarray(image)
+
+        buffered = io.BytesIO()
+        image.save(buffered, format="JPEG")
+        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+        url = (
+            f"{self.base_url}?api_key={self.api_key}"
+            f"&confidence={int(threshold * 100)}&format=json"
+        )
+        req = urllib.request.Request(url, data=img_str.encode('utf-8'), method="POST")
+        req.add_header("Content-Type", "application/x-www-form-urlencoded")
+
+        try:
+            with urllib.request.urlopen(req) as response:
+                return json.loads(response.read())
+        except urllib.error.URLError:
+            return {"predictions": []}
 
 
 class RFDetrDetector:
@@ -48,11 +98,7 @@ class RFDetrDetector:
     def _ensure_model(self) -> Any:
         if self._model is not None:
             return self._model
-        # Local inference model (COCO-trained).
-        from rfdetr import RFDETRMedium  # noqa: PLC0415
-
-        self._model = RFDETRMedium()
-        return self._model
+        raise RuntimeError("No model provided. Local fallback disabled for memory savings.")
 
     def _ensure_coco_classes(self) -> list[str]:
         if self._coco_classes is None:
@@ -65,13 +111,43 @@ class RFDetrDetector:
         model = self._ensure_model()
         detections = model.predict(rgb, threshold=self._threshold)
 
-        xyxy = np.asarray(getattr(detections, "xyxy"))
-        class_id = np.asarray(getattr(detections, "class_id"))
-        confidence = np.asarray(getattr(detections, "confidence"))
+        # Handle 'HostedInference' return format (dict with 'predictions' list)
+        if isinstance(detections, dict) and "predictions" in detections:
+            items: list[dict[str, Any]] = []
+            for p in detections["predictions"]:
+                conf = float(p.get("confidence", 0.0))
+                if conf < self._threshold:
+                    continue
+                cls_name = str(p.get("class", "unknown"))
+                if self._include_classes is not None and cls_name not in self._include_classes:
+                    continue
+                x = float(p.get("x", 0.0))
+                y = float(p.get("y", 0.0))
+                w = float(p.get("width", 0.0))
+                h = float(p.get("height", 0.0))
+
+                # HostedInference usually returns center x/y and width/height
+                x1, y1 = x - w / 2, y - h / 2
+                x2, y2 = x + w / 2, y + h / 2
+                items.append({
+                    "class": cls_name,
+                    "confidence": conf,
+                    "bbox_xyxy": [x1, y1, x2, y2],
+                })
+
+            return {
+                "ts": time.time(),
+                "frame": {"width": int(frame.width or 0), "height": int(frame.height or 0)},
+                "detections": items,
+            }
+
+        xyxy = np.asarray(getattr(detections, "xyxy", []))
+        class_id = np.asarray(getattr(detections, "class_id", []))
+        confidence = np.asarray(getattr(detections, "confidence", []))
 
         coco = self._ensure_coco_classes()
 
-        items: list[dict[str, Any]] = []
+        items = []
         for i in range(int(xyxy.shape[0])):
             cls_idx = int(class_id[i]) if i < class_id.shape[0] else -1
             cls_name = coco[cls_idx] if 0 <= cls_idx < len(coco) else "unknown"
@@ -144,6 +220,7 @@ class RFDetrDetectionProcessor(VideoProcessor):
 
         shared_forwarder.add_frame_handler(on_frame, fps=self._fps, name=self.name)
         self._handler_added = True
+        _log.info("[SPRINT 4] RF-DETR detection processor active (person/ball at %dfps).", self._fps)
         self._worker = asyncio.create_task(self._run())
 
     async def _run(self) -> None:
@@ -157,6 +234,13 @@ class RFDetrDetectionProcessor(VideoProcessor):
             # Cache latest detections so the Vision Agents `Agent` can expose them
             # to the LLM as processor state (frames + Roboflow labels in-context).
             self._latest_payload = payload
+            det_count = len(payload.get("detections", []))
+            if det_count > 0:
+                _log.info(
+                    "[rfdetr] session=%s detections=%d classes=%s",
+                    session_id, det_count,
+                    [d["class"] for d in payload.get("detections", [])],
+                )
             await detections_hub.publish(session_id, payload)
 
     def state(self) -> dict[str, Any] | None:  # pragma: no cover - trivial getter

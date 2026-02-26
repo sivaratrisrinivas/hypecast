@@ -9,6 +9,9 @@ import {
 
 const CALL_TYPE = "default";
 
+/** Delay before joining so the backend Runner has time to create the call on Stream (avoids coordinator timeout). Keep short (1s) so the camera is in the call before the agent's "wait for other participants" check. */
+const JOIN_DELAY_MS = 1000;
+
 /** Request and release media so device list is populated before Stream SDK join (avoids MicrophoneManager .find on undefined). */
 async function ensureDeviceListPopulated(): Promise<void> {
   try {
@@ -42,12 +45,17 @@ export function CameraView({
   const client = clientProp ?? clientFromContext;
   const [joinError, setJoinError] = useState<string | null>(null);
   const [isJoining, setIsJoining] = useState(false);
+  const [hasJoined, setHasJoined] = useState(false);
   const leaveRef = useRef<(() => Promise<void>) | null>(null);
 
   const showJoinInfo = Boolean(joinUrl);
 
   useEffect(() => {
-    if (!client || !streamCallId) return;
+    console.log("[CameraView] Effect triggered. client:", !!client, "streamCallId:", streamCallId);
+    if (!client || !streamCallId) {
+      console.log("[CameraView] Missing client or streamCallId — not joining.");
+      return;
+    }
 
     const call = client.call(CALL_TYPE, streamCallId);
     let cancelled = false;
@@ -55,24 +63,49 @@ export function CameraView({
     const run = async () => {
       setIsJoining(true);
       setJoinError(null);
+      setHasJoined(false);
       try {
+        console.log("[CameraView] Ensuring device list populated...");
         await ensureDeviceListPopulated();
+        console.log("[CameraView] Device list populated. Waiting", JOIN_DELAY_MS, "ms for Runner to create call...");
+        // Give Runner time to create the call on Stream; otherwise client join can timeout (5s).
+        await new Promise((r) => setTimeout(r, JOIN_DELAY_MS));
+        if (cancelled) return;
+        console.log("[CameraView] Attempting call.join({ create: true }) for streamCallId:", streamCallId);
         await call.join({ create: true });
+        console.log("[CameraView] call.join() SUCCESS");
         if (cancelled) {
           await call.leave();
           return;
         }
+        setHasJoined(true);
         leaveRef.current = () => call.leave();
+        console.log("[CameraView] Enabling camera...");
         await call.camera.enable().catch((e) => {
           console.warn("[CameraView] camera.enable failed:", e);
         });
+        console.log("[CameraView] Camera enabled. Enabling microphone...");
         if (cancelled) return;
         await call.microphone.enable().catch((e) => {
           console.warn("[CameraView] microphone.enable failed:", e);
         });
+        console.log("[CameraView] Microphone enabled. Camera is fully streaming.");
       } catch (err) {
+        console.error("[CameraView] call.join() or setup FAILED:", err);
         if (!cancelled) {
-          setJoinError(err instanceof Error ? err.message : "Failed to join");
+          const msg = err instanceof Error ? err.message : String(err);
+          const isMediaError =
+            msg.toLowerCase().includes("video stream") ||
+            msg.toLowerCase().includes("permission") ||
+            msg.toLowerCase().includes("notallowed") ||
+            msg.toLowerCase().includes("notfound") ||
+            msg === "" ||
+            msg === "{}";
+          setJoinError(
+            isMediaError
+              ? "Camera/mic unavailable. Open this page in Chrome or Safari for full camera access."
+              : msg || "Failed to join call",
+          );
         }
       } finally {
         if (!cancelled) setIsJoining(false);
@@ -81,6 +114,7 @@ export function CameraView({
 
     run();
     return () => {
+      console.log("[CameraView] Effect cleanup — leaving call for streamCallId:", streamCallId);
       cancelled = true;
       leaveRef.current?.();
       leaveRef.current = null;
@@ -96,9 +130,11 @@ export function CameraView({
         <span className="text-sm text-neutral-400">
           {isJoining
             ? "Connecting..."
-            : showJoinInfo
+            : hasJoined
               ? "Streaming"
-              : "Camera inactive"}
+              : showJoinInfo
+                ? "Waiting for camera..."
+                : "Camera inactive"}
         </span>
       </div>
 

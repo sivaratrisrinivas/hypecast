@@ -10,65 +10,73 @@ logger = logging.getLogger(__name__)
 
 
 class _Synthesizer(Protocol):
-    def synthesize(self, text: str, *args: Any, **kwargs: Any) -> bytes: ...
+    def stream_audio(self, text: str, *args: Any, **kwargs: Any) -> Any: ...
 
 
 def wrap_tts_with_fallback(
-    tts: _Synthesizer,
+    tts: Any,
     *,
     session_id_provider: Callable[[], str | None],
     tracker: CommentaryTracker | None = None,
 ) -> None:
     """
-    Wrap an ElevenLabs TTS instance so that:
+    Wrap an ElevenLabs TTS instance (stream_audio) so that:
 
-    - All text passed to synthesize() is recorded via CommentaryTracker.
-    - Exceptions from ElevenLabs trigger a graceful fallback that:
+    - All text passed to stream_audio() is recorded via CommentaryTracker.
+    - Exceptions trigger a graceful fallback that:
         - Logs the failure
-        - Publishes raw text to the commentary WebSocket hub so the frontend
-          can drive SpeechSynthesis or another client-side TTS.
-
-    This mutates the instance in-place (replacing tts.synthesize) so existing
-    tests that assert identity (agent.tts is TTS instance) continue to hold.
+        - Publishes raw text to the commentary WebSocket hub.
     """
     tracker = tracker or commentary_tracker
 
-    if not hasattr(tts, "synthesize"):
-        logger.warning("TTS instance %r has no synthesize() method; fallback wrapper skipped.", tts)
+    if not hasattr(tts, "stream_audio"):
+        logger.warning("TTS instance %r has no stream_audio() method; fallback wrapper skipped.", tts)
         return
 
-    original = tts.synthesize  # type: ignore[assignment]
+    original = tts.stream_audio
 
-    def safe_synthesize(text: str, *args: Any, **kwargs: Any) -> bytes:  # type: ignore[override]
+    def safe_stream_audio(text: str, *args: Any, **kwargs: Any) -> Any:
         session_id = session_id_provider()
+        logger.info("[tts_fallback] Requesting TTS for: %.60s...", text)
+        entry = None
         if session_id and tracker is not None:
-            tracker.record(session_id, text)
+            entry = tracker.record(session_id, text)
+            if entry:
+                commentary_hub.publish_nowait(
+                    session_id,
+                    {
+                        "text": entry.text,
+                        "energy_level": entry.energy_level,
+                        "is_highlight": entry.is_highlight,
+                    },
+                )
+
         try:
-            return original(text, *args, **kwargs)
+            result = original(text, *args, **kwargs)
+            if result is None:
+                logger.warning("[tts_fallback] stream_audio returned None (No audio generated).")
+            else:
+                logger.info("[tts_fallback] stream_audio SUCCESS (type=%s)", type(result).__name__)
+            return result
         except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "[tts_fallback] ElevenLabs TTS failed for session %s: %s. "
-                "Falling back to text/WebSocket delivery.",
-                session_id,
+            logger.error(
+                "[SPRINT 4] [tts_fallback] ElevenLabs TTS (stream_audio) FAILED: %s",
                 exc,
+                exc_info=True
             )
-            if session_id:
+            if session_id and entry is None:
+                energy = tracker.score_energy(text) if tracker is not None else 0.0
                 commentary_hub.publish_nowait(
                     session_id,
                     {
                         "text": text,
-                        # We don't have direct access to the computed CommentaryEntry here,
-                        # but the tracker.record() call above has already appended it to
-                        # the session log. For the WebSocket payload we only need a
-                        # coarse energy/highlight signal; recompute using tracker.
-                        "energy_level": tracker.score_energy(text) if tracker is not None else 0.0,
-                        "is_highlight": (
-                            tracker.score_energy(text) > tracker.energy_threshold if tracker is not None else False
-                        ),
+                        "energy_level": energy,
+                        "is_highlight": energy > (tracker.energy_threshold if tracker is not None else 0.75),
                     },
                 )
-            # Return silence (empty bytes) so the agent pipeline doesn't crash.
-            return b""
+            # Return None to avoid crashing the agent loop
+            return None
 
-    tts.synthesize = safe_synthesize  # type: ignore[assignment]
+    tts.stream_audio = safe_stream_audio
+    logger.info("[SPRINT 4] TTS fallback wrapper installed (stream_audio + CommentaryTracker).")
 

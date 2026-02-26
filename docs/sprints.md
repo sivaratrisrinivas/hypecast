@@ -98,18 +98,18 @@ This document translates the project specifications into an actionable, exhausti
 - [x] **4.1 RF-DETR Integration (Local)**
   - **Details:** Add an RF-DETR-based `VideoProcessor` to the agent pipeline (built on `rfdetr`) to detect players/balls at 5fps. Expose detection metadata via an internal hub (and optionally WebSocket) for later UI overlays.
   - **Validation:** Unit test providing a static sample frame (via a fake model) asserting the processor emits JSON bounding boxes for `person`/`sports ball`.
-- [x] **4.2 Gemini Realtime Integration**
-  - **Details:** Feed the Stream frames + Roboflow labels into `gemini.Realtime(fps=3)` using `gemini.Realtime(model="gemini-2.5-flash", fps=3)`. Configure the strict "ESPN Commentator" system prompt via the `instructions` parameter on the `Agent` class initialization, and surface RF-DETR detection state to the LLM via the processor `state()`.
+- [x] **4.2 Gemini VLM Integration**
+  - **Details:** Use `gemini.VLM(model="gemini-3-flash-preview", fps=3)` so the pipeline uses separate STT/TTS (ElevenLabs Scribe + TTS) and our commentary/fallback run. Feed Stream frames and RF-DETR state into the agent. Configure the strict "ESPN Commentator" system prompt via `instructions`.
   - **Validation:** Backend pytest suite including `test_gemini_realtime.py` (Gemini wiring + ESPN prompt) and `test_rfdetr_detection.py` (JSON payload + processor state) passes (`uv run pytest -q`).
 - [x] **4.3 ElevenLabs TTS Integration**
   - **Details:** Route the string chunks from Gemini to `elevenlabs.TTS(voice_id="Chris")` in the agent pipeline. Default voice is `Chris`, overridable via `ELEVENLABS_VOICE_ID`.
-  - **Validation:** `backend/tests/test_elevenlabs_tts.py` patches `gemini.Realtime` and `elevenlabs.TTS` to a fake TTS implementation, asserts that `create_agent()` wires ElevenLabs with the Chris voice by default, and verifies that text chunks invoke the TTS handler and produce non-empty audio buffers.
+  - **Validation:** `backend/tests/test_elevenlabs_tts.py` patches `gemini.VLM`, `elevenlabs.STT`, and `elevenlabs.TTS`; asserts `create_agent()` wires ElevenLabs TTS (Chris voice) and that text chunks produce audio. `test_gemini_realtime.py` asserts VLM + ESPN prompt.
 - [x] **4.4 Commentary Logging & Energy Scoring**
   - **Details:** Capture Gemini text outputs in `CommentaryTracker`. Each line gets an `energy_level` heuristic score in \[0.0–1.0\]; entries with hype keywords like "UNBELIEVABLE" intentionally score >0.75 and are flagged as `is_highlight` for downstream reel generation.
   - **Validation:** `backend/tests/test_commentary_tracker.py` uses parameterized sentences to verify `energy_level` and `is_highlight` behavior and ensures entries are appended to `GameSession.commentary_log` with timestamps relative to `created_at`.
-- [ ] **4.5 Graceful Degradation / Fallback**
-  - **Details:** If ElevenLabs fails or rate limits, fallback to standard TTS or send raw text via WebSockets so the frontend can use `SpeechSynthesis`.
-  - **Validation:** Exception injection test ensuring the fallback loop triggers.
+- [x] **4.5 Graceful Degradation / Fallback**
+  - **Details:** If ElevenLabs fails or rate limits, wrap TTS with a fallback that logs the failure, still records commentary via `CommentaryTracker`, and publishes raw text (with energy/highlight flags) over a commentary WebSocket so the frontend can drive `SpeechSynthesis` or another local TTS.
+  - **Validation:** `backend/tests/test_tts_fallback.py` injects a TTS exception and asserts that the wrapper returns silent bytes, appends a highlighted `CommentaryEntry`, and emits a fallback payload suitable for the frontend to speak.
 
 ---
 

@@ -4,8 +4,6 @@ import sys
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from services.gcs import (
     DEFAULT_BUCKET,
     REEL_EXPIRATION_SECONDS,
@@ -50,7 +48,11 @@ def test_generate_signed_url_builds_correct_parameters() -> None:
     with (
         patch.dict(
             sys.modules,
-            {"google": MagicMock(), "google.cloud": mock_cloud, "google.cloud.storage": mock_storage},
+            {
+                "google": MagicMock(),
+                "google.cloud": mock_cloud,
+                "google.cloud.storage": mock_storage,
+            },
         ),
         patch.dict("os.environ", {"GCS_BUCKET": ""}, clear=False),
     ):
@@ -91,7 +93,11 @@ def test_generate_signed_url_default_expiration_48h() -> None:
     with (
         patch.dict(
             sys.modules,
-            {"google": MagicMock(), "google.cloud": mock_cloud, "google.cloud.storage": mock_storage},
+            {
+                "google": MagicMock(),
+                "google.cloud": mock_cloud,
+                "google.cloud.storage": mock_storage,
+            },
         ),
         patch("services.gcs.get_bucket_name", return_value=DEFAULT_BUCKET),
     ):
@@ -119,7 +125,11 @@ def test_upload_blob_calls_upload_from_string() -> None:
     with (
         patch.dict(
             sys.modules,
-            {"google": MagicMock(), "google.cloud": mock_cloud, "google.cloud.storage": mock_storage},
+            {
+                "google": MagicMock(),
+                "google.cloud": mock_cloud,
+                "google.cloud.storage": mock_storage,
+            },
         ),
         patch("services.gcs.get_bucket_name", return_value=DEFAULT_BUCKET),
     ):
@@ -127,4 +137,7 @@ def test_upload_blob_calls_upload_from_string() -> None:
 
     mock_client.bucket.assert_called_once_with(DEFAULT_BUCKET)
     mock_bucket.blob.assert_called_once_with("sessions/sid456/raw.webm")
-    mock_blob.upload_from_string.assert_called_once_with(b"fake-webm-bytes", content_type="video/webm")
+    mock_blob.upload_from_string.assert_called_once_with(
+        b"fake-webm-bytes",
+        content_type="video/webm",
+    )

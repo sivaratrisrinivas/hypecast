@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { SessionStatus } from "@/types/session";
+import type { SessionStatus } from "@/src/types/session";
 
 function getApiBase(): string {
   if (typeof window === "undefined") return "";
@@ -50,11 +50,13 @@ export function useSpectatorSession(sessionId: string | null): UseSpectatorSessi
     const load = async () => {
       setError(null);
       setIsLoading(true);
+      console.log("[useSpectatorSession] Loading session", sessionId, "from", base);
       try {
         const [tokenRes, statusRes] = await Promise.all([
           fetch(`${base}/api/sessions/${sessionId}/token?role=spectator`),
           fetch(`${base}/api/sessions/${sessionId}`),
         ]);
+        console.log("[useSpectatorSession] Token response:", tokenRes.status, "| Status response:", statusRes.status);
 
         if (!tokenRes.ok) {
           if (tokenRes.status === 404) {
@@ -85,16 +87,19 @@ export function useSpectatorSession(sessionId: string | null): UseSpectatorSessi
         }
 
         if (!cancelled) {
-          setSession({
+          const sessionState = {
             streamToken: tokenBody.stream_token,
             streamCallId: tokenBody.call_id,
             userId: tokenBody.user_id,
             status,
             reelId,
             reelUrl,
-          });
+          };
+          console.log("[useSpectatorSession] Session loaded:", { ...sessionState, streamToken: sessionState.streamToken.substring(0, 20) + "..." });
+          setSession(sessionState);
         }
       } catch (e) {
+        console.error("[useSpectatorSession] Error loading session:", e);
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Failed to load session");
         }
