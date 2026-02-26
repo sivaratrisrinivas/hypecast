@@ -107,7 +107,7 @@ export function SpectatorView({
       setIsJoining(true);
       setJoinError(null);
       try {
-        await call.join({ create: false });
+        await call.join({ create: false, audio: false, video: false });
         if (cancelled) {
           await call.leave();
           return;

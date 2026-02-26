@@ -20,10 +20,31 @@ from services.store import sessions
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 logging.basicConfig(level=logging.INFO)
 
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("websocket").setLevel(logging.WARNING)
+
+class _NoiseFilter(logging.Filter):
+    """Filter known non-fatal transport races to keep logs actionable."""
+
+    _SUPPRESSED_SNIPPETS = (
+        "Timeout waiting for pending track:",
+        'Cannot handle offer in signaling state "closed"',
+    )
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(snippet in msg for snippet in self._SUPPRESSED_SNIPPETS)
+
+
+for _handler in logging.getLogger().handlers:
+    _handler.addFilter(_NoiseFilter())
+
 # File-based logging so we can read errors even when terminal reads fail
 _file_handler = logging.FileHandler("/tmp/agent_debug.log", mode="w")
 _file_handler.setLevel(logging.DEBUG)
 _file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+_file_handler.addFilter(_NoiseFilter())
 logging.getLogger().addHandler(_file_handler)
 
 # Apply 60s iat skew to getstream token creation so agent join tokens are accepted

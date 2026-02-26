@@ -71,7 +71,7 @@ describe("SpectatorView", () => {
 
     await waitFor(() => {
       expect(call).toHaveBeenCalledWith("default", "test-call-id");
-      expect(join).toHaveBeenCalledWith({ create: false });
+      expect(join).toHaveBeenCalledWith({ create: false, audio: false, video: false });
     });
 
     await waitFor(() => {

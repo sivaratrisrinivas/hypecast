@@ -36,10 +36,15 @@ export function useDeviceRole(options?: DetectionOptions): UseDeviceRoleResult {
     // 1. URL param override
     const url = new URL(window.location.href);
     const paramRole = options?.initialRoleParam ?? url.searchParams.get("role");
-    console.log("[useDeviceRole] URL param role:", paramRole, "| initialRoleParam:", options?.initialRoleParam);
     if (paramRole === "camera" || paramRole === "spectator") {
       resolvedRole = paramRole;
-      console.log("[useDeviceRole] Role from URL param:", resolvedRole);
+    }
+
+    // 1.5 Route override: /game/[sessionId] is always spectator join flow.
+    // This prevents narrow devices from falling back to camera UI when opening
+    // a shared join URL.
+    if (!resolvedRole && /^\/game\/[^/]+/.test(url.pathname)) {
+      resolvedRole = "spectator";
     }
 
     // 1.5 Route override: /game/[sessionId] is always spectator join flow.
@@ -53,16 +58,13 @@ export function useDeviceRole(options?: DetectionOptions): UseDeviceRoleResult {
     // 2. Screen-width heuristic if not set yet
     if (!resolvedRole) {
       const width = window.innerWidth || document.documentElement.clientWidth;
-      console.log("[useDeviceRole] No URL param; using screen width heuristic. width:", width);
       if (width <= 768) {
         resolvedRole = "camera";
       } else {
         resolvedRole = "spectator";
       }
-      console.log("[useDeviceRole] Resolved role from screen width:", resolvedRole);
     }
 
-    console.log("[useDeviceRole] Final resolved role:", resolvedRole);
     queueMicrotask(() => {
       setRole(resolvedRole);
       setIsLoading(false);

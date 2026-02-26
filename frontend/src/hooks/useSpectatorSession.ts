@@ -50,13 +50,11 @@ export function useSpectatorSession(sessionId: string | null): UseSpectatorSessi
     const load = async () => {
       setError(null);
       setIsLoading(true);
-      console.log("[useSpectatorSession] Loading session", sessionId, "from", base);
       try {
         const [tokenRes, statusRes] = await Promise.all([
           fetch(`${base}/api/sessions/${sessionId}/token?role=spectator`),
           fetch(`${base}/api/sessions/${sessionId}`),
         ]);
-        console.log("[useSpectatorSession] Token response:", tokenRes.status, "| Status response:", statusRes.status);
 
         if (!tokenRes.ok) {
           if (tokenRes.status === 404) {
@@ -95,7 +93,6 @@ export function useSpectatorSession(sessionId: string | null): UseSpectatorSessi
             reelId,
             reelUrl,
           };
-          console.log("[useSpectatorSession] Session loaded:", { ...sessionState, streamToken: sessionState.streamToken.substring(0, 20) + "..." });
           setSession(sessionState);
         }
       } catch (e) {
