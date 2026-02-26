@@ -107,3 +107,44 @@ def test_wrap_tts_with_fallback_handles_async_stream_audio_errors(monkeypatch) -
     assert result is None
     assert len(session.commentary_log) == 1
     assert published[-1]["session_id"] == session_id
+
+
+class _FakeSendTTS:
+    def stream_audio(self, text: str, *args: Any, **kwargs: Any) -> Any:
+        return b"ok"
+
+    async def send(self, text: str, *args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("concurrent_limit_exceeded")
+
+
+def test_wrap_tts_with_fallback_wraps_send_and_publishes_on_send_failure(monkeypatch) -> None:
+    session_id = "test-session-send-fallback"
+    session = GameSession(id=session_id, stream_call_id=f"pickup-{session_id}")
+    sessions[session_id] = session
+    tracker = CommentaryTracker()
+
+    hub = CommentaryHub()
+    published: list[dict[str, Any]] = []
+
+    def _publish_nowait(sid: str, payload: dict[str, Any]) -> None:
+        published.append({"session_id": sid, **payload})
+
+    import services.tts_fallback as tts_fallback_module
+    monkeypatch.setattr(tts_fallback_module, "commentary_hub", hub, raising=True)
+    monkeypatch.setattr(hub, "publish_nowait", _publish_nowait, raising=True)
+
+    tts = _FakeSendTTS()
+    wrap_tts_with_fallback(
+        tts,
+        session_id_provider=lambda: session_id,
+        tracker=tracker,
+    )
+
+    # Record commentary text so send() fallback has context, then trigger send failure.
+    tts.stream_audio("What a huge momentum swing!")
+
+    import asyncio
+    result = asyncio.run(tts.send("ignored by fallback"))
+    assert result is None
+    assert len(published) >= 1
+    assert published[-1]["session_id"] == session_id

@@ -23,7 +23,11 @@ export type GameShellProps = {
 };
 
 export function GameShell({ spectatorSessionId = null }: GameShellProps) {
-  const { role, isLoading } = useDeviceRole();
+  const { role, isLoading } = useDeviceRole({
+    // Any explicit /game/[sessionId] route is a spectator join flow.
+    initialRoleParam: spectatorSessionId ? "spectator" : null,
+  });
+  const resolvedRole = spectatorSessionId ? "spectator" : role;
   const { session, createSession, error: sessionError, isCreating } = useSession();
   const {
     session: spectatorSession,
@@ -98,7 +102,7 @@ export function GameShell({ spectatorSessionId = null }: GameShellProps) {
     );
   }
 
-  if (role === "camera") {
+  if (resolvedRole === "camera") {
     console.log("[GameShell] Rendering CAMERA view. session:", !!session, "streamClient:", !!streamClient, "streamCallId:", session?.streamCallId);
     const joinUrl = session
       ? `${typeof window !== "undefined" ? window.location.origin : ""}${session.joinUrl}`

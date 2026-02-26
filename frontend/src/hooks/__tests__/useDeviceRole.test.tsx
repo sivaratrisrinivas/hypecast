@@ -75,4 +75,30 @@ describe("useDeviceRole", () => {
     });
     expect(result.current.role).toBe("spectator");
   });
+
+  it("uses initialRoleParam override when provided", async () => {
+    setViewportWidth(375); // would normally resolve to camera
+
+    const { result } = renderHook(() =>
+      useDeviceRole({ initialRoleParam: "spectator" }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+    expect(result.current.role).toBe("spectator");
+  });
+
+  it("forces spectator on /game/[sessionId] route without role param", async () => {
+    // @ts-expect-error - jsdom override
+    window.location = new URL("https://example.com/game/abc123") as unknown as Location;
+    setViewportWidth(375); // would normally be camera
+
+    const { result } = renderHook(() => useDeviceRole());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+    expect(result.current.role).toBe("spectator");
+  });
 });

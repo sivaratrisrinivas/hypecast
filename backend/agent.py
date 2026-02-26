@@ -171,7 +171,8 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
         agent_user=agent_user,
         instructions=ESPN_SYSTEM_PROMPT,
         processors=[],
-        streaming_tts=True,
+        # Disable chunk-level streaming to reduce concurrent ElevenLabs requests (429s).
+        streaming_tts=False,
     )
     logging.getLogger(__name__).info(
         "[create_agent] Agent created. edge=%s, llm=%s, processors=%s, agent_user=%s",
@@ -245,11 +246,15 @@ async def join_call(agent: Agent, call_type: str, call_id: str, **kwargs: Any) -
 
             # Kick-start commentary
             logger.info("[join_call] Calling simple_response() to start commentary...")
-            await agent.simple_response(
-                "Start commentating on the live game you see. "
-                "Describe the action play-by-play like a sports broadcaster."
-            )
-            logger.info("[join_call] simple_response() done. Commentary active.")
+            try:
+                await agent.simple_response(
+                    "Start commentating on the live game you see. "
+                    "Describe the action play-by-play like a sports broadcaster."
+                )
+                logger.info("[join_call] simple_response() done. Commentary active.")
+            except Exception as exc:  # noqa: BLE001
+                logger.error("[join_call] simple_response failed (%s): %s", type(exc).__name__, exc, exc_info=True)
+                logger.warning("[join_call] LLM failed to produce initial commentary; waiting for next frames/turns.")
 
             # Block until call ends
             logger.info("[join_call] Calling agent.finish()...")
