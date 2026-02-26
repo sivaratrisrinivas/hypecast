@@ -13,10 +13,7 @@ from vision_agents.plugins import elevenlabs, gemini, getstream
 
 from app.main import app as api_app
 from models.session import SessionStatus
-from services.commentary_hub import commentary_hub
 from services.commentary_tracker import commentary_tracker
-from services.frame_capture import FrameCaptureProcessor
-from services.rfdetr_detection import RFDetrDetectionProcessor
 from services.store import sessions
 
 # Load .env from backend dir (where agent.py runs)
@@ -66,6 +63,10 @@ logging.getLogger(__name__).debug(
     _IAT_SKEW_SECONDS,
 )
 
+
+
+
+
 ESPN_SYSTEM_PROMPT = """
 You are an elite ESPN sports commentator broadcasting a live game. Your job is to provide
 continuous, exciting play-by-play commentary of whatever game you see.
@@ -92,24 +93,22 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
     """
     Factory for the Vision Agents `Agent`.
 
-    This wires the real pipeline:
+    This wires the core live-commentary pipeline:
       - Edge transport via Stream (`getstream.Edge`)
-      - Gemini VLM (vision) + ElevenLabs STT + ElevenLabs TTS
-      - Frame capture and RF-DETR detection processors
+      - Gemini VLM (vision) + ElevenLabs TTS
     """
     logging.getLogger(__name__).info(
-        "[SPRINT 3] Agent factory: Runner + frame capture + GCS path configured."
+        "[create_agent] Agent factory: core runner + live commentary path configured."
     )
     logging.getLogger(__name__).info(
-        "[SPRINT 4] Agent factory: Gemini Realtime + RF-DETR + commentary pipeline configured."
+        "[create_agent] Heavy processors removed for simpler hackathon runtime."
     )
     stream_api_key = os.environ.get("STREAM_API_KEY")
     stream_api_secret = os.environ.get("STREAM_API_SECRET")
     logging.getLogger(__name__).info(
-        "[create_agent] Env vars: STREAM_API_KEY=%s, STREAM_API_SECRET=%s, GOOGLE_API_KEY=%s, ROBOFLOW_API_KEY=%s, ELEVENLABS_API_KEY=%s",
+        "[create_agent] Env vars: STREAM_API_KEY=%s, STREAM_API_SECRET=%s, GOOGLE_API_KEY=%s, ELEVENLABS_API_KEY=%s",
         bool(stream_api_key), bool(stream_api_secret),
         bool(os.environ.get("GOOGLE_API_KEY")),
-        bool(os.environ.get("ROBOFLOW_API_KEY")),
         bool(os.environ.get("ELEVENLABS_API_KEY")),
     )
     if not stream_api_key or not stream_api_secret:
@@ -163,28 +162,6 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
         voice_id,
     )
 
-    roboflow_api_key = os.environ.get("ROBOFLOW_API_KEY")
-    if not roboflow_api_key:
-        raise RuntimeError("ROBOFLOW_API_KEY is not set; required for hosted inference.")
-
-    # Use cloud inference instead of local inference to save memory
-    from services.rfdetr_detection import RoboflowCloudDetector
-    roboflow_model = RoboflowCloudDetector(
-        api_key=roboflow_api_key,
-        model_id="football-players-detection-3zvbc/1"
-    )
-
-    # Frame capture: save incoming WebRTC frames to GCS
-    frame_capture = FrameCaptureProcessor(fps=15)
-
-    # Pass cloud model to our custom processor
-    detection = RFDetrDetectionProcessor(
-        fps=5,
-        threshold=0.5,
-        model=roboflow_model
-    )
-    processors: list[Any] = [frame_capture, detection]
-
     agent_user = User(id="hypecast-agent", name="Hypecast Commentator")
 
     agent = Agent(
@@ -193,13 +170,13 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
         tts=tts,
         agent_user=agent_user,
         instructions=ESPN_SYSTEM_PROMPT,
-        processors=processors,
+        processors=[],
         streaming_tts=True,
     )
     logging.getLogger(__name__).info(
         "[create_agent] Agent created. edge=%s, llm=%s, processors=%s, agent_user=%s",
         type(edge).__name__, type(llm).__name__,
-        [type(p).__name__ for p in processors],
+        [],
         agent_user.id,
     )
 
@@ -222,17 +199,8 @@ async def join_call(agent: Agent, call_type: str, call_id: str, **kwargs: Any) -
     )
 
     try:
-        # Configure processors for this session
         if session_id:
             setattr(agent, "_session_id", session_id)
-            for p in agent.processors:
-                if isinstance(p, FrameCaptureProcessor):
-                    p.set_output_blob_path(f"sessions/{session_id}/raw.webm")
-                    break
-            for p in agent.processors:
-                if isinstance(p, RFDetrDetectionProcessor):
-                    p.set_session_id(session_id)
-                    break
 
         # Register agent user in Stream
         logger.info("[join_call] Calling create_user()...")
