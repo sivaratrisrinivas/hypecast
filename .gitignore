@@ -12,6 +12,7 @@ __pycache__/
 .uv/
 .venv/
 venv/
+*.pth
 
 # Env
 .env

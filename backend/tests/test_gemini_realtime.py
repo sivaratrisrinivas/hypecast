@@ -4,9 +4,18 @@ import pytest
 from vision_agents.core.events import EventManager
 from agent import ESPN_SYSTEM_PROMPT, create_agent
 
-class _FakeVLM:
-    """Fake gemini.VLM for tests."""
-    def __init__(self, *, model: str = "", fps: int = 1, api_key: str | None = None, **_: object) -> None:
+
+class _FakeRealtime:
+    """Fake gemini.Realtime for tests."""
+
+    def __init__(
+        self,
+        *,
+        model: str = "",
+        fps: int = 1,
+        api_key: str | None = None,
+        **_: object,
+    ) -> None:
         self.model = model
         self.fps = fps
         self.api_key = api_key
@@ -26,15 +35,16 @@ class _FakeAgentObject:
         self.processors = kwargs.get("processors")
         self.instructions = kwargs.get("instructions")
 
+
 @pytest.mark.asyncio
-async def test_create_agent_uses_gemini_vlm_with_espn_prompt(
+async def test_create_agent_uses_gemini_realtime_with_espn_prompt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Verify that the agent uses Gemini VLM with the correct system prompt (Sprint 4.2)."""
-    created_llms: list[_FakeVLM] = []
+    """Verify that the agent uses gemini.Realtime with ESPN system prompt."""
+    created_llms: list[_FakeRealtime] = []
 
-    def _fake_vlm(**kwargs: object) -> _FakeVLM:
-        llm = _FakeVLM(**kwargs)  # type: ignore[arg-type]
+    def _fake_realtime(**kwargs: object) -> _FakeRealtime:
+        llm = _FakeRealtime(**kwargs)  # type: ignore[arg-type]
         created_llms.append(llm)
         return llm
 
@@ -42,15 +52,21 @@ async def test_create_agent_uses_gemini_vlm_with_espn_prompt(
     monkeypatch.setenv("ELEVENLABS_API_KEY", "test-elevenlabs-key")
 
     import agent as agent_module
-    monkeypatch.setattr(agent_module.gemini, "VLM", _fake_vlm, raising=True)
-    monkeypatch.setattr(agent_module.getstream, "Edge", _FakeEdge, raising=True)
-    monkeypatch.setattr(agent_module, "Agent", _FakeAgentObject, raising=True)
+
+    monkeypatch.setattr(
+        agent_module.gemini, "Realtime", _fake_realtime, raising=True
+    )
+    monkeypatch.setattr(
+        agent_module.getstream, "Edge", _FakeEdge, raising=True
+    )
+    monkeypatch.setattr(
+        agent_module, "Agent", _FakeAgentObject, raising=True
+    )
 
     agent = await create_agent()
 
     assert len(created_llms) == 1
     llm = created_llms[0]
     assert llm.fps == 3
-    assert llm.model == "gemini-3-flash-preview"
 
     assert agent.instructions == ESPN_SYSTEM_PROMPT

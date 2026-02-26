@@ -8,12 +8,16 @@ from typing import Any
 
 from dotenv import load_dotenv
 from vision_agents.core import Agent, AgentLauncher, Runner, User
-from vision_agents.core.llm.events import VLMInferenceCompletedEvent
+from vision_agents.core.llm.events import (
+    RealtimeAgentSpeechTranscriptionEvent,
+    VLMInferenceCompletedEvent,
+)
 from vision_agents.plugins import elevenlabs, gemini, getstream
 
 from app.main import app as api_app
 from models.session import SessionStatus
 from services.commentary_tracker import commentary_tracker
+from services.rfdetr_detection import RFDetrDetectionProcessor
 from services.store import sessions
 
 # Load .env from backend dir (where agent.py runs)
@@ -114,76 +118,104 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
     """
     Factory for the Vision Agents `Agent`.
 
-    This wires the core live-commentary pipeline:
+    Hackathon stack:
       - Edge transport via Stream (`getstream.Edge`)
-      - Gemini VLM (vision) + ElevenLabs TTS
+      - `gemini.Realtime` — real-time video understanding + speech
+      - `roboflow.RFDETRProcessor` — player/ball detection at 5 fps
+      - `elevenlabs.TTS` — high-quality ESPN voice (Chris)
     """
-    logging.getLogger(__name__).info(
-        "[MVP] Agent factory: Vision Agents core path configured (Edge + Gemini VLM + ElevenLabs TTS)."
-    )
-    logging.getLogger(__name__).info(
-        "[MVP] Optional heavy processors disabled to keep one-tap flow stable."
-    )
+    logger = logging.getLogger(__name__)
     stream_api_key = os.environ.get("STREAM_API_KEY")
     stream_api_secret = os.environ.get("STREAM_API_SECRET")
-    logging.getLogger(__name__).info(
-        "[create_agent] Env vars: STREAM_API_KEY=%s, STREAM_API_SECRET=%s, GOOGLE_API_KEY=%s, ELEVENLABS_API_KEY=%s",
-        bool(stream_api_key), bool(stream_api_secret),
+    logger.info(
+        "[create_agent] Env vars: STREAM_API_KEY=%s, "
+        "STREAM_API_SECRET=%s, GOOGLE_API_KEY=%s, "
+        "ELEVENLABS_API_KEY=%s",
+        bool(stream_api_key),
+        bool(stream_api_secret),
         bool(os.environ.get("GOOGLE_API_KEY")),
         bool(os.environ.get("ELEVENLABS_API_KEY")),
     )
     if not stream_api_key or not stream_api_secret:
         logging.warning(
-            "STREAM_API_KEY/STREAM_API_SECRET not set; Edge transport will likely fail.",
+            "STREAM_API_KEY/STREAM_API_SECRET not set; "
+            "Edge transport will likely fail.",
         )
 
     google_api_key = os.environ.get("GOOGLE_API_KEY", "").strip()
     if not google_api_key:
         raise RuntimeError(
-            "GOOGLE_API_KEY is not set; Gemini VLM commentary is disabled."
+            "GOOGLE_API_KEY is not set; Gemini Realtime is disabled."
         )
 
-    elevenlabs_api_key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
+    elevenlabs_api_key = os.environ.get(
+        "ELEVENLABS_API_KEY", ""
+    ).strip()
     if not elevenlabs_api_key:
         logging.warning(
-            "ELEVENLABS_API_KEY not set; ElevenLabs TTS will be disabled or limited.",
+            "ELEVENLABS_API_KEY not set; "
+            "ElevenLabs TTS will be disabled or limited.",
         )
 
-    # Stream Edge reads STREAM_API_KEY / STREAM_API_SECRET from env
     edge = getstream.Edge()
 
-    # Sprint 4.2: Gemini VLM (vision -> text)
-    # Using 'gemini-3-flash-preview' as per spec.md (default in vision-agents)
-    llm = gemini.VLM(
-        model="gemini-3-flash-preview",
-        fps=3,
+    # gemini.Realtime — real-time speech-to-speech with video frames
+    llm = gemini.Realtime(
         api_key=google_api_key,
+        fps=3,
     )
-    logging.getLogger(__name__).info(
-        "[create_agent] LLM configured: gemini.VLM(fps=3). vision -> text pipeline active."
+    logger.info(
+        "[create_agent] LLM: gemini.Realtime(fps=3). "
+        "Real-time video + speech pipeline active."
     )
 
-    # Sprint 4.3: ElevenLabs TTS (text -> speech)
-    # Using 'Chris' UUID: Anr9GtYh2VRXxiPplzxM
-    voice_id = os.environ.get("ELEVENLABS_VOICE_ID", "Anr9GtYh2VRXxiPplzxM")
+    # ElevenLabs TTS — high-quality voice (Chris)
+    voice_id = os.environ.get(
+        "ELEVENLABS_VOICE_ID", "Anr9GtYh2VRXxiPplzxM"
+    )
     tts = elevenlabs.TTS(
         api_key=elevenlabs_api_key,
         voice_id=voice_id,
     )
 
-    # Sprint 4.5: Graceful Degradation / Fallback
     from services.tts_fallback import wrap_tts_with_fallback
+
     wrap_tts_with_fallback(
         tts,
         session_id_provider=lambda: getattr(agent, "_session_id", None),
         tracker=commentary_tracker,
     )
-    logging.getLogger(__name__).info(
-        "[create_agent] TTS configured: elevenlabs.TTS(voice_id=%s) with fallback wrapper.",
+    logger.info(
+        "[create_agent] TTS: elevenlabs.TTS(voice_id=%s) "
+        "with fallback wrapper.",
         voice_id,
     )
 
-    agent_user = User(id="hypecast-agent", name="Hypecast Commentator")
+    # RF-DETR detection processor — player/ball tracking
+    processors: list[Any] = []
+    try:
+        from rfdetr import RFDETRBase
+
+        rfdetr_model = RFDETRBase()
+        detection_processor = RFDetrDetectionProcessor(
+            fps=5, threshold=0.5, model=rfdetr_model,
+        )
+        processors.append(detection_processor)
+        logger.info(
+            "[create_agent] Processor: RFDetrDetectionProcessor "
+            "(RFDETRBase, 5fps, person+ball)."
+        )
+    except Exception as exc:
+        logger.warning(
+            "[create_agent] RF-DETR unavailable (%s): %s. "
+            "Running without detection processor.",
+            type(exc).__name__,
+            exc,
+        )
+
+    agent_user = User(
+        id="hypecast-agent", name="Hypecast Commentator"
+    )
 
     agent = Agent(
         edge=edge,
@@ -191,96 +223,148 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
         tts=tts,
         agent_user=agent_user,
         instructions=ESPN_SYSTEM_PROMPT,
-        processors=[],
-        # Disable chunk-level streaming to reduce concurrent ElevenLabs requests (429s).
-        streaming_tts=False,
+        processors=processors,
     )
-    logging.getLogger(__name__).info(
-        "[create_agent] Agent created. edge=%s, llm=%s, processors=%s, agent_user=%s",
-        type(edge).__name__, type(llm).__name__,
-        [],
+    logger.info(
+        "[create_agent] Agent created. edge=%s, llm=%s, "
+        "tts=%s, processors=%d, agent_user=%s",
+        type(edge).__name__,
+        type(llm).__name__,
+        type(tts).__name__,
+        len(processors),
         agent_user.id,
     )
 
     return agent
 
 
-async def join_call(agent: Agent, call_type: str, call_id: str, **kwargs: Any) -> None:
-    """
-    Lifecycle hook called by AgentLauncher when a new session starts.
-    """
+async def join_call(
+    agent: Agent, call_type: str, call_id: str, **kwargs: Any
+) -> None:
+    """Lifecycle hook called by AgentLauncher when a new session starts."""
     t0 = time.monotonic()
     logger = logging.getLogger(__name__)
-    logger.info("[join_call] START call_id=%s call_type=%s", call_id, call_type)
+    logger.info(
+        "[join_call] START call_id=%s call_type=%s", call_id, call_type
+    )
 
-    # Derive session_id from call_id
-    session_id = call_id.removeprefix("pickup-") if call_id.startswith("pickup-") else None
+    session_id = (
+        call_id.removeprefix("pickup-")
+        if call_id.startswith("pickup-")
+        else None
+    )
     logger.info(
         "[join_call] session_id=%s known_sessions=%s",
-        session_id, list(sessions.keys()),
+        session_id,
+        list(sessions.keys()),
     )
 
     try:
         if session_id:
             setattr(agent, "_session_id", session_id)
+            for proc in getattr(agent, "processors", []):
+                if isinstance(proc, RFDetrDetectionProcessor):
+                    proc.set_session_id(session_id)
 
-        # Register agent user in Stream
         logger.info("[join_call] Calling create_user()...")
         await agent.create_user()
-        logger.info("[join_call] create_user() done in %.2fs", time.monotonic() - t0)
+        logger.info(
+            "[join_call] create_user() done in %.2fs",
+            time.monotonic() - t0,
+        )
 
-        # Create the Stream call
-        logger.info("[join_call] Calling create_call(%s, %s)...", call_type, call_id)
+        logger.info(
+            "[join_call] Calling create_call(%s, %s)...",
+            call_type,
+            call_id,
+        )
         call = await agent.create_call(call_type, call_id)
-        logger.info("[join_call] create_call() done in %.2fs", time.monotonic() - t0)
+        logger.info(
+            "[join_call] create_call() done in %.2fs",
+            time.monotonic() - t0,
+        )
 
-        # Subscribe to Gemini's output for logging
+        # Log Realtime agent speech transcriptions (commentary text)
+        async def _on_agent_speech(
+            event: RealtimeAgentSpeechTranscriptionEvent,
+        ):
+            if event.text:
+                logger.info("[realtime] Agent said: %.80s", event.text)
+                if session_id:
+                    commentary_tracker.record(session_id, event.text)
+
+        agent.subscribe(_on_agent_speech)
+
+        # Also subscribe VLM events as fallback if VLM pipeline fires
         async def _on_vlm_inference(event: VLMInferenceCompletedEvent):
             if event.text:
                 logger.info("[vlm] Gemini said: %.60s...", event.text)
 
         agent.subscribe(_on_vlm_inference)
-        logger.info("[join_call] VLM inference logger subscribed for session=%s", session_id)
+        logger.info(
+            "[join_call] Event listeners subscribed for session=%s",
+            session_id,
+        )
 
-        # Join the call
         logger.info("[join_call] Calling agent.join()...")
         async with agent.join(call):
-            logger.info("[join_call] INSIDE agent.join() context — agent is connected!")
+            logger.info(
+                "[join_call] INSIDE agent.join() — agent is connected!"
+            )
 
-            # Give camera/spectator peers time to fully register before first LLM turn.
-            # This follows Vision Agents call-lifecycle guidance to avoid exiting early
-            # when the agent does not detect other participants yet.
-            warmup_seconds = float(os.environ.get("AGENT_STARTUP_WARMUP_SECONDS", "5"))
+            warmup_seconds = float(
+                os.environ.get("AGENT_STARTUP_WARMUP_SECONDS", "5")
+            )
             if warmup_seconds > 0:
                 logger.info(
-                    "[join_call] Warmup sleep %.1fs before initial commentary turn.",
+                    "[join_call] Warmup sleep %.1fs before "
+                    "initial commentary turn.",
                     warmup_seconds,
                 )
                 await asyncio.sleep(warmup_seconds)
 
-            # Mark app session LIVE
             if session_id and session_id in sessions:
                 sessions[session_id].status = SessionStatus.LIVE
-                logger.info("[join_call] Session %s set to LIVE.", session_id)
+                logger.info(
+                    "[join_call] Session %s set to LIVE.", session_id
+                )
             elif session_id:
-                logger.warning("[join_call] session_id=%s not in sessions store!", session_id)
+                logger.warning(
+                    "[join_call] session_id=%s not in sessions store!",
+                    session_id,
+                )
 
-            # Kick-start commentary
-            logger.info("[join_call] Calling simple_response() to start commentary (MVP seed turn)...")
+            logger.info(
+                "[join_call] Calling simple_response() to "
+                "start commentary (seed turn)..."
+            )
             try:
                 await agent.simple_response(
                     "Start commentating on the live game you see. "
-                    "Describe the action play-by-play like a sports broadcaster."
+                    "Describe the action play-by-play like a "
+                    "sports broadcaster."
                 )
-                logger.info("[join_call] simple_response() done. Commentary active.")
+                logger.info(
+                    "[join_call] simple_response() done. "
+                    "Commentary active."
+                )
             except Exception as exc:  # noqa: BLE001
-                logger.error("[join_call] simple_response failed (%s): %s", type(exc).__name__, exc, exc_info=True)
-                logger.warning("[join_call] LLM failed to produce initial commentary; waiting for next frames/turns.")
+                logger.error(
+                    "[join_call] simple_response failed (%s): %s",
+                    type(exc).__name__,
+                    exc,
+                    exc_info=True,
+                )
+                logger.warning(
+                    "[join_call] LLM failed to produce initial "
+                    "commentary; waiting for next frames/turns."
+                )
 
-            # Block until call ends
             logger.info("[join_call] Calling agent.finish()...")
             await agent.finish()
-            logger.info("[join_call] agent.finish() returned — call ended.")
+            logger.info(
+                "[join_call] agent.finish() returned — call ended."
+            )
 
     except Exception as e:
         logger.error("[join_call] EXCEPTION: %s", e, exc_info=True)
@@ -297,7 +381,8 @@ runner = Runner(
     ),
 )
 logging.getLogger(__name__).info(
-    "[MVP] Vision Agents runner started (core edge+vlm+tts path)."
+    "[Hypecast] Vision Agents runner started "
+    "(Realtime + RFDETRProcessor + ElevenLabs TTS)."
 )
 
 # Mount the existing FastAPI app (which prefixes its own routes under `/api`)

@@ -4,9 +4,18 @@ import pytest
 from vision_agents.core.events import EventManager
 from agent import create_agent
 
-class _FakeVLM:
-    """Fake gemini.VLM for tests."""
-    def __init__(self, *, model: str = "", fps: int = 1, api_key: str | None = None, **_: object) -> None:
+
+class _FakeRealtime:
+    """Fake gemini.Realtime for tests."""
+
+    def __init__(
+        self,
+        *,
+        model: str = "",
+        fps: int = 1,
+        api_key: str | None = None,
+        **_: object,
+    ) -> None:
         self.model = model
         self.fps = fps
         self.api_key = api_key
@@ -26,29 +35,37 @@ class _FakeAgentObject:
         self.processors = kwargs.get("processors")
         self.instructions = kwargs.get("instructions")
 
+
 class _FakeTTS:
     """Fake elevenlabs.TTS for tests."""
-    def __init__(self, api_key: str | None = None, voice_id: str = "", **_: object) -> None:
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        voice_id: str = "",
+        **_: object,
+    ) -> None:
         self.api_key = api_key
         self.voice_id = voice_id
         self.events = EventManager()
-    
+
     def synthesize(self, text: str) -> bytes:
         return b"fake_audio"
 
     def stream_audio(self, text: str):
         return b"fake_audio"
 
+
 @pytest.mark.asyncio
-async def test_create_agent_uses_separate_vlm_and_tts(
+async def test_create_agent_uses_realtime_and_tts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Verify that the agent uses separate Gemini VLM and ElevenLabs TTS (Sprint 4)."""
-    created_llms: list[_FakeVLM] = []
+    """Verify agent uses gemini.Realtime + elevenlabs.TTS + RFDETRProcessor."""
+    created_llms: list[_FakeRealtime] = []
     created_tts: list[_FakeTTS] = []
 
-    def _fake_vlm(**kwargs: object) -> _FakeVLM:
-        llm = _FakeVLM(**kwargs)  # type: ignore[arg-type]
+    def _fake_realtime(**kwargs: object) -> _FakeRealtime:
+        llm = _FakeRealtime(**kwargs)  # type: ignore[arg-type]
         created_llms.append(llm)
         return llm
 
@@ -61,17 +78,25 @@ async def test_create_agent_uses_separate_vlm_and_tts(
     monkeypatch.setenv("ELEVENLABS_API_KEY", "test-elevenlabs-key")
 
     import agent as agent_module
-    monkeypatch.setattr(agent_module.gemini, "VLM", _fake_vlm, raising=True)
-    monkeypatch.setattr(agent_module.getstream, "Edge", _FakeEdge, raising=True)
-    monkeypatch.setattr(agent_module, "Agent", _FakeAgentObject, raising=True)
-    monkeypatch.setattr(agent_module.elevenlabs, "TTS", _fake_tts, raising=True)
+
+    monkeypatch.setattr(
+        agent_module.gemini, "Realtime", _fake_realtime, raising=True
+    )
+    monkeypatch.setattr(
+        agent_module.getstream, "Edge", _FakeEdge, raising=True
+    )
+    monkeypatch.setattr(
+        agent_module, "Agent", _FakeAgentObject, raising=True
+    )
+    monkeypatch.setattr(
+        agent_module.elevenlabs, "TTS", _fake_tts, raising=True
+    )
 
     agent = await create_agent()
 
-    # Verify VLM
+    # Verify Realtime LLM
     assert len(created_llms) == 1
     llm = created_llms[0]
-    assert llm.model == "gemini-3-flash-preview"
     assert llm.fps == 3
 
     # Verify TTS
@@ -82,8 +107,12 @@ async def test_create_agent_uses_separate_vlm_and_tts(
 
     # Verify Agent has tts configured
     assert agent.tts is not None
-    # Agent.tts might be wrapped by our fallback wrapper, but it should still be there.
     assert hasattr(agent.tts, "stream_audio")
 
-    # Heavy processors removed for simpler runtime path
-    assert agent.processors == []
+    # RF-DETR processor should be in the list
+    from services.rfdetr_detection import RFDetrDetectionProcessor
+
+    assert any(
+        isinstance(p, RFDetrDetectionProcessor)
+        for p in agent.processors
+    )
