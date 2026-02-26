@@ -12,6 +12,12 @@ You use two devices with one link: the **phone** is the camera, the **laptop** i
 
 The goal is one-tap, zero-setup commentary: no accounts, no choosing a sport or typing names. You open the link, tap START, and the AI describes what it sees. After the game, you get a packaged highlight reel instead of a long raw clip. It’s built for the **Vision Possible: Agent Protocol** hackathon (WeMakeDevs, Feb–Mar 2026) and uses Stream’s [Vision Agents](https://visionagents.ai) tools.
 
+### Current MVP (hackathon-first)
+
+1. Camera taps **START**.
+2. Spectator opens `/game/{session_id}` and enables audio.
+3. Vision Agents pipeline (Edge + Gemini VLM + ElevenLabs TTS) streams commentary in real time, with text fallback if audio synthesis fails.
+
 ---
 
 ## How to run it

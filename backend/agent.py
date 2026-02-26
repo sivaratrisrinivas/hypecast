@@ -98,10 +98,10 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
       - Gemini VLM (vision) + ElevenLabs TTS
     """
     logging.getLogger(__name__).info(
-        "[create_agent] Agent factory: core runner + live commentary path configured."
+        "[MVP] Agent factory: Vision Agents core path configured (Edge + Gemini VLM + ElevenLabs TTS)."
     )
     logging.getLogger(__name__).info(
-        "[create_agent] Heavy processors removed for simpler hackathon runtime."
+        "[MVP] Optional heavy processors disabled to keep one-tap flow stable."
     )
     stream_api_key = os.environ.get("STREAM_API_KEY")
     stream_api_secret = os.environ.get("STREAM_API_SECRET")
@@ -245,7 +245,7 @@ async def join_call(agent: Agent, call_type: str, call_id: str, **kwargs: Any) -
                 logger.warning("[join_call] session_id=%s not in sessions store!", session_id)
 
             # Kick-start commentary
-            logger.info("[join_call] Calling simple_response() to start commentary...")
+            logger.info("[join_call] Calling simple_response() to start commentary (MVP seed turn)...")
             try:
                 await agent.simple_response(
                     "Start commentating on the live game you see. "
@@ -276,7 +276,7 @@ runner = Runner(
     ),
 )
 logging.getLogger(__name__).info(
-    "[SPRINT 3] Vision Agents Runner started (mounts FastAPI app, POST /sessions for agent join)."
+    "[MVP] Vision Agents runner started (core edge+vlm+tts path)."
 )
 
 # Mount the existing FastAPI app (which prefixes its own routes under `/api`)
