@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import pytest
 from vision_agents.core.events import EventManager
 from agent import create_agent
@@ -16,6 +15,17 @@ class _FakeVLM:
     def _attach_agent(self, _agent: object) -> None:
         return None
 
+
+class _FakeEdge:
+    pass
+
+
+class _FakeAgentObject:
+    def __init__(self, **kwargs: object) -> None:
+        self.tts = kwargs.get("tts")
+        self.processors = kwargs.get("processors")
+        self.instructions = kwargs.get("instructions")
+
 class _FakeTTS:
     """Fake elevenlabs.TTS for tests."""
     def __init__(self, api_key: str | None = None, voice_id: str = "", **_: object) -> None:
@@ -26,7 +36,10 @@ class _FakeTTS:
     def synthesize(self, text: str) -> bytes:
         return b"fake_audio"
 
-@pytest.mark.anyio
+    def stream_audio(self, text: str):
+        return b"fake_audio"
+
+@pytest.mark.asyncio
 async def test_create_agent_uses_separate_vlm_and_tts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -46,10 +59,11 @@ async def test_create_agent_uses_separate_vlm_and_tts(
 
     monkeypatch.setenv("GOOGLE_API_KEY", "test-google-key")
     monkeypatch.setenv("ELEVENLABS_API_KEY", "test-elevenlabs-key")
-    monkeypatch.setenv("ROBOFLOW_API_KEY", "test-roboflow-key")
 
     import agent as agent_module
     monkeypatch.setattr(agent_module.gemini, "VLM", _fake_vlm, raising=True)
+    monkeypatch.setattr(agent_module.getstream, "Edge", _FakeEdge, raising=True)
+    monkeypatch.setattr(agent_module, "Agent", _FakeAgentObject, raising=True)
     monkeypatch.setattr(agent_module.elevenlabs, "TTS", _fake_tts, raising=True)
 
     agent = await create_agent()
@@ -64,9 +78,12 @@ async def test_create_agent_uses_separate_vlm_and_tts(
     assert len(created_tts) == 1
     tts = created_tts[0]
     assert tts.api_key == "test-elevenlabs-key"
-    assert tts.voice_id == "Chris"
+    assert tts.voice_id == "Anr9GtYh2VRXxiPplzxM"
 
     # Verify Agent has tts configured
     assert agent.tts is not None
     # Agent.tts might be wrapped by our fallback wrapper, but it should still be there.
-    assert hasattr(agent.tts, "synthesize")
+    assert hasattr(agent.tts, "stream_audio")
+
+    # Heavy processors removed for simpler runtime path
+    assert agent.processors == []

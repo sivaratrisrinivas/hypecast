@@ -59,27 +59,21 @@ export function useSession(): UseSessionResult {
     setError(null);
     setIsCreating(true);
     const base = getApiBase();
-    console.log("[useSession] Creating session... POST", `${base}/api/sessions`);
+
     try {
       const res = await fetch(`${base}/api/sessions`, { method: "POST" });
-      console.log("[useSession] POST /api/sessions response:", res.status, res.statusText);
       if (!res.ok) {
         const text = await res.text();
         throw new Error(text || `Session create failed: ${res.status}`);
       }
+
       const body = (await res.json()) as Record<string, unknown>;
-      console.log("[useSession] POST /api/sessions body:", body);
       const createPayload = mapCreateResponse(body);
-      console.log("[useSession] Mapped create payload:", createPayload);
-      // Fire-and-forget Vision Agents runner session so the agent joins the Stream call.
-      // Runner expects: POST /sessions { "call_type": "default", "call_id": "<stream_call_id>" }.
+
       if (base && createPayload.streamCallId) {
-        // Use an async IIFE so test environments that stub `fetch` as a bare
-        // function (returning undefined) don't throw when accessing `.catch`.
-        // Any network error here is non-fatal to the main app flow.
         void (async () => {
           try {
-            const runnerRes = await fetch(`${base}/sessions`, {
+            await fetch(`${base}/sessions`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -89,20 +83,12 @@ export function useSession(): UseSessionResult {
                 call_id: createPayload.streamCallId,
               }),
             });
-            console.info(
-              "[useSession] Runner POST /sessions →",
-              runnerRes.status,
-              runnerRes.statusText,
-            );
           } catch (err) {
-            console.warn(
-              "[useSession] Runner POST /sessions failed:",
-              err,
-            );
+            console.warn("[useSession] Runner POST /sessions failed:", err);
           }
         })();
       }
-      console.log("[useSession] Setting initial session state (waiting)");
+
       setSession({
         ...createPayload,
         status: "waiting",
@@ -116,7 +102,6 @@ export function useSession(): UseSessionResult {
     }
   }, []);
 
-  // Poll GET /api/sessions/{id} when we have a session; stop when terminal status or unmount
   useEffect(() => {
     if (!session?.sessionId) return;
 
@@ -127,22 +112,18 @@ export function useSession(): UseSessionResult {
       if (pollAbortRef.current) pollAbortRef.current.abort();
       pollAbortRef.current = new AbortController();
       try {
-        console.log("[useSession] Polling GET", `${base}/api/sessions/${session.sessionId}`);
         const res = await fetch(`${base}/api/sessions/${session.sessionId}`, {
           signal: pollAbortRef.current.signal,
         });
         if (!res.ok) {
-          console.warn("[useSession] Poll response not ok:", res.status);
           if (res.status === 404) return;
           setError(`Poll failed: ${res.status}`);
           return;
         }
         const body = (await res.json()) as Record<string, unknown>;
         const statusPayload = mapStatusResponse(body);
-        console.log("[useSession] Poll result:", statusPayload);
         setSession((prev: SessionState | null) => {
           if (!prev) return null;
-          // Avoid new object reference when nothing changed (prevents downstream memo busts)
           if (
             prev.status === statusPayload.status &&
             prev.reelId === statusPayload.reelId &&
@@ -154,7 +135,6 @@ export function useSession(): UseSessionResult {
         });
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return;
-        console.error("[useSession] Poll error:", err);
         setError(err instanceof Error ? err.message : "Poll error");
       }
     };
