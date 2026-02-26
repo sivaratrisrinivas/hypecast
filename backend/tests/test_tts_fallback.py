@@ -67,3 +67,43 @@ def test_wrap_tts_with_fallback_records_and_falls_back(monkeypatch) -> None:
     assert "text" in payload and "energy_level" in payload and "is_highlight" in payload
     assert payload["text"].startswith("UNBELIEVABLE")
     assert payload["is_highlight"] is True
+
+
+class _FakeAsyncTTS:
+    def __init__(self, should_raise: bool) -> None:
+        self._should_raise = should_raise
+
+    async def stream_audio(self, text: str, *args: Any, **kwargs: Any) -> Any:
+        if self._should_raise:
+            raise RuntimeError("async rate limited")
+        return b"ok-async"
+
+
+def test_wrap_tts_with_fallback_handles_async_stream_audio_errors(monkeypatch) -> None:
+    session_id = "test-session-async-fallback"
+    session = GameSession(id=session_id, stream_call_id=f"pickup-{session_id}")
+    sessions[session_id] = session
+    tracker = CommentaryTracker()
+
+    hub = CommentaryHub()
+    published: list[dict[str, Any]] = []
+
+    def _publish_nowait(sid: str, payload: dict[str, Any]) -> None:
+        published.append({"session_id": sid, **payload})
+
+    import services.tts_fallback as tts_fallback_module
+    monkeypatch.setattr(tts_fallback_module, "commentary_hub", hub, raising=True)
+    monkeypatch.setattr(hub, "publish_nowait", _publish_nowait, raising=True)
+
+    tts = _FakeAsyncTTS(should_raise=True)
+    wrap_tts_with_fallback(
+        tts,
+        session_id_provider=lambda: session_id,
+        tracker=tracker,
+    )
+
+    import asyncio
+    result = asyncio.run(tts.stream_audio("What an explosive final minute!"))
+    assert result is None
+    assert len(session.commentary_log) == 1
+    assert published[-1]["session_id"] == session_id

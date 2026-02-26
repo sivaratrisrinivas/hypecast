@@ -257,6 +257,17 @@ async def join_call(agent: Agent, call_type: str, call_id: str, **kwargs: Any) -
         async with agent.join(call):
             logger.info("[join_call] INSIDE agent.join() context — agent is connected!")
 
+            # Give camera/spectator peers time to fully register before first LLM turn.
+            # This follows Vision Agents call-lifecycle guidance to avoid exiting early
+            # when the agent does not detect other participants yet.
+            warmup_seconds = float(os.environ.get("AGENT_STARTUP_WARMUP_SECONDS", "5"))
+            if warmup_seconds > 0:
+                logger.info(
+                    "[join_call] Warmup sleep %.1fs before initial commentary turn.",
+                    warmup_seconds,
+                )
+                await asyncio.sleep(warmup_seconds)
+
             # Mark app session LIVE
             if session_id and session_id in sessions:
                 sessions[session_id].status = SessionStatus.LIVE
@@ -309,4 +320,3 @@ for route in api_app.routes:
 
 if __name__ == "__main__":
     runner.cli()
-
