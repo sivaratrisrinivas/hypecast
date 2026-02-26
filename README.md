@@ -12,6 +12,12 @@ You use two devices with one link: the **phone** is the camera, the **laptop** i
 
 The goal is one-tap, zero-setup commentary: no accounts, no choosing a sport or typing names. You open the link, tap START, and the AI describes what it sees. After the game, you get a packaged highlight reel instead of a long raw clip. It’s built for the **Vision Possible: Agent Protocol** hackathon (WeMakeDevs, Feb–Mar 2026) and uses Stream’s [Vision Agents](https://visionagents.ai) tools.
 
+### Current MVP (hackathon-first)
+
+1. Camera taps **START**.
+2. Spectator opens `/game/{session_id}` and enables audio.
+3. Vision Agents pipeline (Edge + Gemini VLM + ElevenLabs TTS) streams commentary in real time, with text fallback if audio synthesis fails.
+
 ---
 
 ## How to run it
@@ -55,7 +61,7 @@ cd backend && uv sync && uv run pytest -v && uv run ruff check .
 | Part | Role |
 |------|------|
 | **frontend/** | Web app: landing, camera view (phone), spectator view (laptop). Next.js, React, Tailwind, TypeScript. |
-| **backend/** | Server: FastAPI in `app/main.py` (CORS, health at `/health`); session API in `routes/sessions.py` (POST/GET session, GET token); in-memory store in `services/store.py`, Stream JWT in `services/stream_token.py`, GCS in `services/gcs.py` (signed URLs + `upload_blob`); frame capture in `services/frame_capture.py` (WebRTC frames → `raw.webm` in GCS); `services/rfdetr_detection.py` adds a local RF-DETR processor (5fps, detects `person`/`sports ball`) and exposes detection state to the agent; `services/commentary_tracker.py` scores Gemini commentary text and flags high-energy highlights; `services/tts_fallback.py` wraps ElevenLabs TTS with graceful fallback that sends raw text over WebSockets when TTS fails; `routes/detections_ws.py` and `routes/commentary_ws.py` stream detection and commentary payloads to the frontend; `agent.py` runs the Vision Agents Runner with Gemini Realtime + ElevenLabs TTS (Chris voice by default) wired for ESPN-style commentary and mounts the app under `/`; `models/` for data shapes, `tests/` for pytest (including Gemini Realtime wiring, RF-DETR state, ElevenLabs TTS integration, commentary tracker, and TTS fallback tests). |
+| **backend/** | Server: FastAPI in `app/main.py` (CORS, health at `/health`); session API in `routes/sessions.py` (POST/GET session, GET token); in-memory store in `services/store.py`, Stream JWT in `services/stream_token.py`, GCS in `services/gcs.py` (signed URLs + `upload_blob`); `services/commentary_tracker.py` scores Gemini commentary text and flags high-energy highlights; `services/tts_fallback.py` wraps ElevenLabs TTS with graceful fallback that sends raw text over WebSockets when TTS fails; `routes/commentary_ws.py` streams commentary payloads to the frontend; `agent.py` runs the Vision Agents Runner with Gemini Realtime + ElevenLabs TTS (Chris voice by default) wired for ESPN-style commentary and mounts the app under `/`; `models/` for data shapes, `tests/` for pytest (including ElevenLabs TTS integration, commentary tracker, and TTS fallback tests). |
 | **docs/spec.md** | Full design: data shapes, APIs, how video, RF-DETR detections, Gemini Realtime, ElevenLabs TTS commentary, commentary logging/highlight scoring, and TTS fallback behavior flow end-to-end. |
 | **docs/sprints.md** | Sprint 1–3 done; Sprint 4 now has 4.1 (RF-DETR), 4.2 (Gemini Realtime integration), 4.3 (ElevenLabs TTS integration), and 4.4 (Commentary logging & energy scoring) implemented and tested; Sprint 5 planned. |
 

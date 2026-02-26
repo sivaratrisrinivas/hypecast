@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections import defaultdict
+from collections import defaultdict, deque
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -19,11 +19,20 @@ class CommentaryHub:
     def __init__(self) -> None:
         self._lock = asyncio.Lock()
         self._subscribers: dict[str, set[asyncio.Queue[dict[str, Any]]]] = defaultdict(set)
+        self._history: dict[str, deque[dict[str, Any]]] = defaultdict(lambda: deque(maxlen=25))
 
     async def subscribe(self, session_id: str) -> asyncio.Queue[dict[str, Any]]:
-        q: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=16)
+        q: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=32)
         async with self._lock:
             self._subscribers[session_id].add(q)
+            history = list(self._history.get(session_id, ()))
+
+        # Replay latest commentary so late subscribers still see context.
+        for payload in history:
+            try:
+                q.put_nowait(payload)
+            except asyncio.QueueFull:
+                break
         return q
 
     async def unsubscribe(self, session_id: str, q: asyncio.Queue[dict[str, Any]]) -> None:
@@ -37,6 +46,7 @@ class CommentaryHub:
 
     async def publish(self, session_id: str, payload: dict[str, Any]) -> None:
         async with self._lock:
+            self._history[session_id].append(payload)
             subs = list(self._subscribers.get(session_id, set()))
         logger.info(
             "[commentary_hub] publish session=%s subscribers=%d payload_text=%.60s...",

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import pytest
 from vision_agents.core.events import EventManager
 from agent import ESPN_SYSTEM_PROMPT, create_agent
@@ -16,7 +15,18 @@ class _FakeVLM:
     def _attach_agent(self, _agent: object) -> None:
         return None
 
-@pytest.mark.anyio
+
+class _FakeEdge:
+    pass
+
+
+class _FakeAgentObject:
+    def __init__(self, **kwargs: object) -> None:
+        self.tts = kwargs.get("tts")
+        self.processors = kwargs.get("processors")
+        self.instructions = kwargs.get("instructions")
+
+@pytest.mark.asyncio
 async def test_create_agent_uses_gemini_vlm_with_espn_prompt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -29,11 +39,12 @@ async def test_create_agent_uses_gemini_vlm_with_espn_prompt(
         return llm
 
     monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
-    monkeypatch.setenv("ROBOFLOW_API_KEY", "test-roboflow-key")
     monkeypatch.setenv("ELEVENLABS_API_KEY", "test-elevenlabs-key")
 
     import agent as agent_module
     monkeypatch.setattr(agent_module.gemini, "VLM", _fake_vlm, raising=True)
+    monkeypatch.setattr(agent_module.getstream, "Edge", _FakeEdge, raising=True)
+    monkeypatch.setattr(agent_module, "Agent", _FakeAgentObject, raising=True)
 
     agent = await create_agent()
 
@@ -42,5 +53,4 @@ async def test_create_agent_uses_gemini_vlm_with_espn_prompt(
     assert llm.fps == 3
     assert llm.model == "gemini-3-flash-preview"
 
-    # In Sprint 4.2+, Agent.instructions holds the prompt
-    assert getattr(agent.instructions, "input_text", None) == ESPN_SYSTEM_PROMPT
+    assert agent.instructions == ESPN_SYSTEM_PROMPT
