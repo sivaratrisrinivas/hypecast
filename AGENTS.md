@@ -17,10 +17,14 @@ The backend can also be started via `uv run agent.py serve --host 0.0.0.0 --port
 
 ### Agent Pipeline Stack
 
-The agent uses:
-- `gemini.Realtime(fps=3)` — real-time speech-to-speech with video frames via WebSocket
-- `RFDetrDetectionProcessor(fps=5)` — RF-DETR local player/ball detection (downloads ~370MB model weights on first run)
-- `elevenlabs.TTS` — ElevenLabs Chris voice for high-quality TTS fallback
+The agent (`agent.py`) uses:
+- `gemini.Realtime(fps=3)` — real-time speech-to-speech with video frames via WebSocket. Generates ESPN-style play-by-play commentary natively.
+- `RFDetrDetectionProcessor(fps=5)` — RF-DETR local player/ball detection (downloads ~370MB model weights on first run). Injects detection state into LLM context.
+- `elevenlabs.TTS(voice_id=Chris)` — ElevenLabs TTS fallback for text-only scenarios.
+
+To run the full agent runner (not just the API): `cd backend && uv run agent.py serve --host 0.0.0.0 --port 8000`. Requires all four secrets. The runner mounts the FastAPI app at `/` and adds the Vision Agents session lifecycle at `POST /sessions`.
+
+Frontend needs `NEXT_PUBLIC_STREAM_API_KEY` in `frontend/.env.local` (same value as `STREAM_API_KEY`) for the Stream Video React SDK.
 
 ### Lint / Test / Build
 
