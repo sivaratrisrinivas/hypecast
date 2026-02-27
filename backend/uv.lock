@@ -676,6 +676,22 @@ wheels = [
 ]
 
 [[package]]
+name = "deepgram-sdk"
+version = "6.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pydantic-core" },
+    { name = "typing-extensions" },
+    { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/73/46/6dc45de574d766a20853452d7beccf17cb0cfeb685a0f03460f1fe49b48e/deepgram_sdk-6.0.1.tar.gz", hash = "sha256:88558a43d6173a861c8b6d6491b9ee8805679fb09fb81ef51eeb6871dad77767", size = 176743 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/58/a4/53b9075816edc566694aed014d9864febedf232677b74f5d30bdde64b5de/deepgram_sdk-6.0.1-py3-none-any.whl", hash = "sha256:1b33d621b1c0b1d7a6a7b46fdc393aef4212e670521fada99764f5fb3f9d55fd", size = 490751 },
+]
+
+[[package]]
 name = "distro"
 version = "1.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1255,7 +1271,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "rfdetr" },
     { name = "uvicorn", extra = ["standard"] },
-    { name = "vision-agents", extra = ["elevenlabs", "gemini", "getstream"] },
+    { name = "vision-agents", extra = ["deepgram", "elevenlabs", "gemini", "getstream"] },
 ]
 
 [package.dev-dependencies]
@@ -1276,7 +1292,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "rfdetr", specifier = ">=1.0.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.41.0" },
-    { name = "vision-agents", extras = ["gemini", "elevenlabs", "getstream"], specifier = ">=0.3.8" },
+    { name = "vision-agents", extras = ["deepgram", "elevenlabs", "gemini", "getstream"], specifier = ">=0.3.8" },
 ]
 
 [package.metadata.requires-dev]
@@ -4182,6 +4198,9 @@ wheels = [
 ]
 
 [package.optional-dependencies]
+deepgram = [
+    { name = "vision-agents-plugins-deepgram" },
+]
 elevenlabs = [
     { name = "vision-agents-plugins-elevenlabs" },
 ]
@@ -4190,6 +4209,19 @@ gemini = [
 ]
 getstream = [
     { name = "vision-agents-plugins-getstream" },
+]
+
+[[package]]
+name = "vision-agents-plugins-deepgram"
+version = "0.3.8"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "deepgram-sdk" },
+    { name = "vision-agents" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ba/4c/e70ecfcd2ced46d0578e946528a338ef303f8c724ebb791f78bfc6118eb1/vision_agents_plugins_deepgram-0.3.8.tar.gz", hash = "sha256:6ab14b0f67e1bc136d50538a450f0646e8eba4828ceb43ffdda6fe5c31ff6b83", size = 5922 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/09/4c/54e0026c1593ddd8838f170602d88826810e12486ae6fd5a0927f0a22192/vision_agents_plugins_deepgram-0.3.8-py3-none-any.whl", hash = "sha256:4b8530323f4ca3a677793e9d32120f998d19feff03498ad7b68fa44db2b7d109", size = 15129 },
 ]
 
 [[package]]
