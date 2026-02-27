@@ -50,6 +50,7 @@ export function useSpectatorSession(sessionId: string | null): UseSpectatorSessi
     const load = async () => {
       setError(null);
       setIsLoading(true);
+      console.log("[useSpectatorSession] load START", { sessionId });
       try {
         const [tokenRes, statusRes] = await Promise.all([
           fetch(`${base}/api/sessions/${sessionId}/token?role=spectator`),
@@ -93,10 +94,11 @@ export function useSpectatorSession(sessionId: string | null): UseSpectatorSessi
             reelId,
             reelUrl,
           };
+          console.log("[useSpectatorSession] load SUCCESS", sessionState);
           setSession(sessionState);
         }
       } catch (e) {
-        console.error("[useSpectatorSession] Error loading session:", e);
+        console.error("[useSpectatorSession] load FAILED", e);
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Failed to load session");
         }

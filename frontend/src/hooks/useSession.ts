@@ -59,9 +59,11 @@ export function useSession(): UseSessionResult {
     setError(null);
     setIsCreating(true);
     const base = getApiBase();
+    console.log("[useSession] createSession START", { base });
 
     try {
       const res = await fetch(`${base}/api/sessions`, { method: "POST" });
+      console.log("[useSession] POST /api/sessions", res.status);
       if (!res.ok) {
         const text = await res.text();
         throw new Error(text || `Session create failed: ${res.status}`);
@@ -89,13 +91,18 @@ export function useSession(): UseSessionResult {
         })();
       }
 
+      console.log("[useSession] createSession SUCCESS", createPayload);
       setSession({
         ...createPayload,
         status: "waiting",
         reelId: null,
         reelUrl: null,
       });
+      if (base && createPayload.streamCallId) {
+        console.log("[useSession] POSTing /sessions (Runner)...");
+      }
     } catch (e) {
+      console.error("[useSession] createSession FAILED", e);
       setError(e instanceof Error ? e.message : "Failed to create session");
     } finally {
       setIsCreating(false);
@@ -122,6 +129,13 @@ export function useSession(): UseSessionResult {
         }
         const body = (await res.json()) as Record<string, unknown>;
         const statusPayload = mapStatusResponse(body);
+        if (
+          statusPayload.status !== "waiting" ||
+          statusPayload.reelId ||
+          statusPayload.reelUrl
+        ) {
+          console.log("[useSession] poll status update", statusPayload);
+        }
         setSession((prev: SessionState | null) => {
           if (!prev) return null;
           if (

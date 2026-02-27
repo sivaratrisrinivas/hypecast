@@ -9,6 +9,9 @@ import { CameraView } from "@/src/components/game/CameraView";
 import { SpectatorView } from "@/src/components/game/SpectatorView";
 import { isSessionStatus, type SessionStatus } from "@/src/types/session";
 
+const GEMINI_MODEL =
+  process.env.NEXT_PUBLIC_GEMINI_MODEL ?? "gemini-3-flash-preview";
+
 function getSpectatorStatusFromUrl(): SessionStatus {
   if (typeof window === "undefined") return "waiting";
   const p = new URL(window.location.href).searchParams.get("status");
@@ -23,6 +26,14 @@ export type GameShellProps = {
 };
 
 export function GameShell({ spectatorSessionId = null }: GameShellProps) {
+  useEffect(() => {
+    console.log("[GameShell] mount", {
+      spectatorSessionId,
+      hasStreamKey: Boolean(process.env.NEXT_PUBLIC_STREAM_API_KEY),
+    });
+    return () => console.log("[GameShell] unmount");
+  }, [spectatorSessionId]);
+
   const { role, isLoading } = useDeviceRole({
     // Any explicit /game/[sessionId] route is a spectator join flow.
     initialRoleParam: spectatorSessionId ? "spectator" : null,
@@ -37,6 +48,27 @@ export function GameShell({ spectatorSessionId = null }: GameShellProps) {
 
   const sessionId = session?.sessionId ?? null;
   const streamToken = session?.streamToken ?? null;
+
+  useEffect(() => {
+    console.log("[GameShell] session state", {
+      sessionId,
+      spectatorSessionId,
+      spectatorSession: spectatorSession
+        ? {
+            streamCallId: spectatorSession.streamCallId,
+            status: spectatorSession.status,
+          }
+        : null,
+      sessionError,
+      spectatorError,
+    });
+  }, [
+    sessionId,
+    spectatorSessionId,
+    spectatorSession,
+    sessionError,
+    spectatorError,
+  ]);
 
   const streamClient = useMemo(() => {
     if (!sessionId || !streamToken || typeof window === "undefined" || !STREAM_API_KEY) {
@@ -92,8 +124,11 @@ export function GameShell({ spectatorSessionId = null }: GameShellProps) {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-black text-white">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-black text-white">
         <p className="text-neutral-400">Detecting device...</p>
+        <p className="mt-4 text-xs text-neutral-600">
+          Powered by {GEMINI_MODEL}
+        </p>
       </div>
     );
   }
@@ -145,7 +180,7 @@ export function GameShell({ spectatorSessionId = null }: GameShellProps) {
   const spectatorView = (
     <SpectatorView
       status={spectatorStatus}
-      streamCallId={spectatorSession?.streamCallId ?? null}
+      streamCallId={spectatorCallId}
       streamVideoClient={spectatorClient}
     />
   );

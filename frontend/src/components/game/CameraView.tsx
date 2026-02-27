@@ -19,6 +19,9 @@ async function ensureDeviceListPopulated(): Promise<void> {
   }
 }
 
+const GEMINI_MODEL =
+  process.env.NEXT_PUBLIC_GEMINI_MODEL ?? "gemini-3-flash-preview";
+
 export type CameraViewProps = {
   onStart: () => void;
   joinUrl?: string | null;
@@ -44,6 +47,7 @@ export function CameraView({
   useEffect(() => {
     if (!client || !streamCallId) return;
 
+    console.log("[CameraView] join effect", { streamCallId, hasClient: !!client });
     const call = client.call(CALL_TYPE, streamCallId);
     let cancelled = false;
 
@@ -51,6 +55,7 @@ export function CameraView({
       setIsJoining(true);
       setJoinError(null);
       setHasJoined(false);
+      console.log("[CameraView] Joining call...", streamCallId);
       try {
         await ensureDeviceListPopulated();
         await new Promise((r) => setTimeout(r, JOIN_DELAY_MS));
@@ -60,6 +65,7 @@ export function CameraView({
           await call.leave();
           return;
         }
+        console.log("[CameraView] Call joined, enabling camera/mic");
         setHasJoined(true);
         leaveRef.current = () => call.leave();
         await call.camera.enable().catch(() => undefined);
@@ -67,6 +73,7 @@ export function CameraView({
         await call.microphone.enable().catch(() => undefined);
       } catch (err) {
         if (!cancelled) {
+          console.error("[CameraView] Join failed", err);
           const msg = err instanceof Error ? err.message : String(err);
           const isMediaError =
             msg.toLowerCase().includes("video stream") ||
@@ -148,6 +155,9 @@ export function CameraView({
             Start
           </button>
         )}
+        <p className="mt-4 text-center text-xs text-neutral-600">
+          Powered by {GEMINI_MODEL}
+        </p>
       </div>
     </div>
   );

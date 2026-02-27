@@ -160,13 +160,20 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
     edge = getstream.Edge()
 
     # gemini.Realtime — real-time speech-to-speech with video frames
+    # Use explicit Live API model: gemini-2.0-flash not supported for bidiGenerateContent in v1alpha
+    gemini_model = os.environ.get(
+        "GEMINI_LIVE_MODEL",
+        "gemini-2.5-flash-native-audio-preview-12-2025",
+    )
     llm = gemini.Realtime(
         api_key=google_api_key,
+        model=gemini_model,
         fps=3,
     )
     logger.info(
-        "[create_agent] LLM: gemini.Realtime(fps=3). "
-        "Real-time video + speech pipeline active."
+        "[create_agent] LLM: gemini.Realtime(model=%s, fps=3). "
+        "Real-time video + speech pipeline active.",
+        gemini_model,
     )
 
     # ElevenLabs TTS — high-quality voice (Chris)

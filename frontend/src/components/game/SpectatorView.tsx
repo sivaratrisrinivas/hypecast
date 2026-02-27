@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+
+const GEMINI_MODEL =
+  process.env.NEXT_PUBLIC_GEMINI_MODEL ?? "gemini-3-flash-preview";
 import {
   ParticipantView,
   StreamCall,
@@ -99,6 +102,7 @@ export function SpectatorView({
       return;
     }
 
+    console.log("[SpectatorView] join effect", { streamCallId });
     let cancelled = false;
     const call = client.call(CALL_TYPE, streamCallId);
     callRef.current = call;
@@ -106,15 +110,18 @@ export function SpectatorView({
     const run = async () => {
       setIsJoining(true);
       setJoinError(null);
+      console.log("[SpectatorView] Joining call...", streamCallId);
       try {
         await call.join({ create: false, audio: false, video: false });
         if (cancelled) {
           await call.leave();
           return;
         }
+        console.log("[SpectatorView] Call joined");
         setCallReady(true);
       } catch (err) {
         if (!cancelled) {
+          console.error("[SpectatorView] Join failed", err);
           setJoinError(err instanceof Error ? err.message : "Failed to join");
         }
       } finally {
@@ -140,6 +147,7 @@ export function SpectatorView({
           <p className="text-xs tracking-[0.2em] text-neutral-500">HYPECAST</p>
           <p className="mt-3 text-2xl font-semibold">{label}</p>
           <p className="mt-3 text-sm text-neutral-500">Mock timer: 0:00</p>
+          <p className="mt-4 text-xs text-neutral-600">Powered by {GEMINI_MODEL}</p>
         </div>
       </div>
     );
@@ -172,6 +180,9 @@ export function SpectatorView({
             <p className="text-sm text-neutral-400">Connecting...</p>
           </div>
         )}
+        <p className="mt-4 text-center text-xs text-neutral-600">
+          Powered by {GEMINI_MODEL}
+        </p>
       </div>
     </div>
   );

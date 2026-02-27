@@ -29,6 +29,7 @@ export function CommentaryTranscript({ sessionId }: Props) {
     if (!wsBase) return;
 
     const url = `${wsBase}/api/ws/sessions/${sessionId}/commentary`;
+    console.log("[CommentaryTranscript] connecting", { url, sessionId });
     let ws: WebSocket | null = null;
     let cancelled = false;
     let connectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -38,7 +39,7 @@ export function CommentaryTranscript({ sessionId }: Props) {
       if (cancelled) return;
 
       ws = new WebSocket(url);
-
+      ws.onopen = () => console.log("[CommentaryTranscript] WebSocket connected");
       ws.onmessage = (evt) => {
         try {
           const data = JSON.parse(evt.data) as {
@@ -52,13 +53,14 @@ export function CommentaryTranscript({ sessionId }: Props) {
         }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (e) => {
+        console.log("[CommentaryTranscript] WebSocket closed", e.code, e.reason);
         if (cancelled) return;
         reconnectTimer = setTimeout(connect, 1000);
       };
 
-      ws.onerror = () => {
-        // In dev (StrictMode / hot reload), transient websocket errors are expected.
+      ws.onerror = (e) => {
+        console.warn("[CommentaryTranscript] WebSocket error", e);
       };
     };
 
