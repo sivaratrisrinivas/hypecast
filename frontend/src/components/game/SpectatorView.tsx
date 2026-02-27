@@ -113,10 +113,7 @@ export function SpectatorView({
       console.log("[SpectatorView] Joining call...", streamCallId);
       try {
         await call.join({ create: false, audio: false, video: false });
-        if (cancelled) {
-          await call.leave();
-          return;
-        }
+        if (cancelled) return; // cleanup already called leave()
         console.log("[SpectatorView] Call joined");
         setCallReady(true);
       } catch (err) {

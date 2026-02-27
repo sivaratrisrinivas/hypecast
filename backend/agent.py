@@ -165,9 +165,13 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
         "GEMINI_LIVE_MODEL",
         "gemini-3-flash-preview",
     )
+    logger.info(
+        "[create_agent] Using Gemini model=%s (set GEMINI_LIVE_MODEL to override)",
+        gemini_model,
+    )
     llm = gemini.Realtime(
-        api_key=google_api_key,
         model=gemini_model,
+        api_key=google_api_key,
         fps=3,
     )
     logger.info(
