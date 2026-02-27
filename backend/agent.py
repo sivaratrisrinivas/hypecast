@@ -160,10 +160,10 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
     edge = getstream.Edge()
 
     # gemini.Realtime — real-time speech-to-speech with video frames
-    # Use explicit Live API model: gemini-2.0-flash not supported for bidiGenerateContent in v1alpha
+    # Per https://visionagents.ai/integrations/gemini — use gemini-3-flash-preview
     gemini_model = os.environ.get(
         "GEMINI_LIVE_MODEL",
-        "gemini-2.5-flash-native-audio-preview-12-2025",
+        "gemini-3-flash-preview",
     )
     llm = gemini.Realtime(
         api_key=google_api_key,

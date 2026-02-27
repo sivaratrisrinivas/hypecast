@@ -69,6 +69,6 @@ async def test_create_agent_uses_gemini_realtime_with_espn_prompt(
     assert len(created_llms) == 1
     llm = created_llms[0]
     assert llm.fps == 3
-    assert llm.model == "gemini-2.5-flash-native-audio-preview-12-2025"
+    assert llm.model == "gemini-3-flash-preview"
 
     assert agent.instructions == ESPN_SYSTEM_PROMPT
