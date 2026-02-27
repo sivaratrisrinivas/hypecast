@@ -44,5 +44,5 @@ See `README.md` "Check code quality" section. Quick reference:
 - `uv` must be on `$PATH`. It installs to `~/.local/bin` — the update script handles this via `PATH` export.
 - Python 3.12 is required (`.python-version` in `backend/`). The system Python 3.12.3 works fine.
 - External API keys (`STREAM_API_KEY`, `STREAM_API_SECRET`, `GOOGLE_API_KEY`, `ELEVENLABS_API_KEY`) are only needed for full agent pipeline (live commentary). The FastAPI server, tests, and frontend all work without them.
-- `GEMINI_LIVE_MODEL` (optional): Override Gemini Live API model. Default `gemini-3-flash-preview` (see https://visionagents.ai/integrations/gemini).
+- `GEMINI_LIVE_MODEL` (optional): Override Gemini Live API model. Default `gemini-2.5-flash-native-audio-preview-12-2025` (gemini-3-flash-preview does not support bidiGenerateContent).
 - The `rfdetr` package downloads ~370MB model weights (`rf-detr-base.pth`) on first import. These are gitignored. The download happens during `create_agent()` and is cached locally after the first run.

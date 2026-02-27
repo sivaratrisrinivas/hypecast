@@ -159,11 +159,11 @@ async def create_agent(**kwargs: Any) -> Agent:  # type: ignore[override]
 
     edge = getstream.Edge()
 
-    # gemini.Realtime — real-time speech-to-speech with video frames
-    # Per https://visionagents.ai/integrations/gemini — use gemini-3-flash-preview
+    # gemini.Realtime — real-time speech-to-speech with video frames via bidiGenerateContent
+    # gemini-3-flash-preview does NOT support Live API; use native-audio model
     gemini_model = os.environ.get(
         "GEMINI_LIVE_MODEL",
-        "gemini-3-flash-preview",
+        "gemini-2.5-flash-native-audio-preview-12-2025",
     )
     logger.info(
         "[create_agent] Using Gemini model=%s (set GEMINI_LIVE_MODEL to override)",
