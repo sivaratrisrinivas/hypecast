@@ -11,6 +11,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "pyjwt>=2.8.0",
     "vision-agents[gemini,elevenlabs,getstream]>=0.3.8",
+    "rfdetr>=1.0.0",
     "google-cloud-storage>=2.14.0",
 ]
 

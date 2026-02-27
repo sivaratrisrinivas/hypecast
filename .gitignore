@@ -8,25 +8,47 @@ frontend/dist/
 # Python / backend
 __pycache__/
 *.pyc
+*.pyo
 .pytest_cache/
+.ruff_cache/
 .uv/
 .venv/
 venv/
 
-# Env
+# Model weights (RF-DETR, PyTorch, ONNX)
+*.pth
+*.pt
+*.onnx
+
+# Debug / scratch scripts (backend root)
+backend/debug_*.py
+backend/test_imports.py
+backend/test_realtime.py
+backend/test_run_forever.py
+backend/test_signatures.py
+backend/test_vlm_event.py
+
+# Env files
 .env
 .env.local
-.env.*.local
+.env.*
+!.env.example
 
 # IDE / OS
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
+*~
 
 # Logs
 *.log
 logs/
+
+# Temp files
+*.tmp
 
 # GCP key
 backend/gcp-key.json
