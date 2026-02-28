@@ -1,5 +1,5 @@
-import { GameShell } from "@/src/components/GameShell";
+import { HypecastApp } from "@/src/components/HypecastApp";
 
-export default function Home() {
-  return <GameShell />;
+export default function Page() {
+  return <HypecastApp />;
 }

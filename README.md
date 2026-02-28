@@ -1,30 +1,14 @@
-# Hypecast
+# HypeCast (Rebuilt)
 
-## What it is
+HypeCast is a real-time sports commentary app with:
 
-Hypecast turns a casual sports game into a live broadcast with commentary. You point your phone at the game and tap **START**. An AI commentator watches the video stream and speaks play-by-play on your laptop in real time. When you tap **END**, the app builds a short highlight reel with that commentary and gives you a link you can share for 48 hours.
+- **Frontend:** Next.js/React webcam client
+- **Backend:** FastAPI API (Railway-ready)
+- **AI layer:** Vision Agents SDK + Gemini (with optional ElevenLabs fallback)
 
-You use two devices with one link: the **phone** is the camera, the **laptop** is where you hear the commentary. The app figures out which device you’re on from screen size, or you can force it with `?role=camera` or `?role=spectator` in the URL.
+## Local development
 
----
-
-## Why it exists
-
-The goal is one-tap, zero-setup commentary: no accounts, no choosing a sport or typing names. You open the link, tap START, and the AI describes what it sees. After the game, you get a packaged highlight reel instead of a long raw clip. It’s built for the **Vision Possible: Agent Protocol** hackathon (WeMakeDevs, Feb–Mar 2026) and uses Stream’s [Vision Agents](https://visionagents.ai) tools.
-
-### Current MVP (hackathon-first)
-
-1. Camera taps **START**.
-2. Spectator opens `/game/{session_id}` and enables audio.
-3. Vision Agents pipeline (Edge + Gemini VLM + ElevenLabs TTS) streams commentary in real time, with text fallback if audio synthesis fails.
-
----
-
-## How to run it
-
-**What you need:** Node.js and pnpm for the frontend; Python 3.11+ and [uv](https://docs.astral.sh/uv/) for the backend.
-
-**Run the app (frontend)**
+### Frontend (port 3000)
 
 ```bash
 cd frontend
@@ -32,49 +16,45 @@ pnpm install
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Use `?role=camera` for the phone view (camera placeholder and START button) or `?role=spectator` for the laptop view (e.g. “Awaiting connection…”).
-
-**Run the API (backend + Vision Agent runner)**
+### Backend (port 8000)
 
 ```bash
 cd backend
 uv sync
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+### Run full Vision Agents runner
+
+```bash
+cd backend
 uv run agent.py serve --host 0.0.0.0 --port 8000
 ```
 
-The API and Vision Agents runner are at [http://localhost:8000](http://localhost:8000). Check [http://localhost:8000/health](http://localhost:8000/health) to confirm it’s up. **CORS** is enabled for `localhost:3000` / `127.0.0.1:3000` so the frontend can call the API. **POST /api/sessions** creates a game session (in-memory store; returns `session_id`, `stream_call_id`, `join_url`, `stream_token`). **GET /api/sessions/{id}** returns session status for polling (WAITING → LIVE, etc.). **GET /api/sessions/{id}/token?role=...** issues Stream tokens. Session end and reel APIs come in later sprints.
+Required env vars for full AI pipeline:
 
-**Check code quality**
+- `STREAM_API_KEY`
+- `STREAM_API_SECRET`
+- `GOOGLE_API_KEY`
+- `ELEVENLABS_API_KEY` (optional fallback voice output)
+
+## Railway deployment (backend)
+
+The backend includes `railway.json` and a `Procfile`.
+
+- Start command: `uv run agent.py serve --host 0.0.0.0 --port $PORT`
+- Healthcheck path: `/health`
+
+## API overview
+
+- `GET /health`
+- `POST /api/sessions`
+- `GET /api/sessions/{session_id}`
+- `WS /api/ws/sessions/{session_id}/commentary`
+
+## Quality checks
 
 ```bash
-# Frontend: lint and tests
-cd frontend && pnpm lint && pnpm test -- --run
-
-# Backend: sync deps then tests and lint (run from backend dir so uv uses project venv)
-cd backend && uv sync && uv run pytest -v && uv run ruff check .
+cd frontend && pnpm lint && pnpm build
+cd backend && uv run ruff check . && uv run pytest -v
 ```
-
----
-
-## What’s in this repo
-
-| Part | Role |
-|------|------|
-| **frontend/** | Web app: landing, camera view (phone), spectator view (laptop). Next.js, React, Tailwind, TypeScript. |
-| **backend/** | Server: FastAPI in `app/main.py` (CORS, health at `/health`); session API in `routes/sessions.py` (POST/GET session, GET token); in-memory store in `services/store.py`, Stream JWT in `services/stream_token.py`, GCS in `services/gcs.py` (signed URLs + `upload_blob`); `services/commentary_tracker.py` scores Gemini commentary text and flags high-energy highlights; `services/tts_fallback.py` wraps ElevenLabs TTS with graceful fallback that sends raw text over WebSockets when TTS fails; `routes/commentary_ws.py` streams commentary payloads to the frontend; `agent.py` runs the Vision Agents Runner with Gemini Realtime + ElevenLabs TTS (Chris voice by default) wired for ESPN-style commentary and mounts the app under `/`; `models/` for data shapes, `tests/` for pytest (including ElevenLabs TTS integration, commentary tracker, and TTS fallback tests). |
-| **docs/spec.md** | Full design: data shapes, APIs, how video, RF-DETR detections, Gemini Realtime, ElevenLabs TTS commentary, commentary logging/highlight scoring, and TTS fallback behavior flow end-to-end. |
-| **docs/sprints.md** | Sprint 1–3 done; Sprint 4 now has 4.1 (RF-DETR), 4.2 (Gemini Realtime integration), 4.3 (ElevenLabs TTS integration), and 4.4 (Commentary logging & energy scoring) implemented and tested; Sprint 5 planned. |
-
----
-
-## Important details
-
-- **Session limits (planned):** One game at a time, up to 5 minutes; highlight reel about 30–60 seconds, 3–5 clips; share link expires in 48 hours.
-- **No login:** No accounts. You open the link and go.
-- **Same URL for both devices:** One link works on phone and laptop; the app picks camera vs spectator from screen size or the `role` query param.
-
-**Console messages (dev):** You may see `[video manager]: Setting direction is not supported on this device` — from Stream SDK on some browsers; safe to ignore. `Unable to add filesystem: <illegal path>` is from the browser or an extension (e.g. DevTools), not the app.
-
----
-
-Built for **Vision Possible: Agent Protocol** (WeMakeDevs). Uses [Vision Agents](https://visionagents.ai) by Stream.

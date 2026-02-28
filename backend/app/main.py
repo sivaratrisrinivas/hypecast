@@ -1,46 +1,72 @@
-"""FastAPI application and CORS configuration for Hypecast."""
+import asyncio
+import secrets
+from contextlib import suppress
 
-# ruff: noqa: I001
-
-import logging
-
-from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from routes.commentary_ws import router as commentary_ws_router
-from routes.detections_ws import router as detections_ws_router
-from routes.sessions import router as sessions_router
+from app.models import GameSession, SessionCreateResponse, SessionReadResponse, SessionStatus
+from app.store import publish_commentary, sessions, subscribe_commentary
 
-load_dotenv()
-
-# Sprint 1: shared types and backend models (GameSession, SessionStatus, CommentaryEntry) are loaded via imports above
-logging.getLogger(__name__).info(
-    "[SPRINT 1] Backend models and shared contracts loaded (Session, CommentaryEntry, GameSession)."
-)
-
-app = FastAPI(
-    title="Hypecast API",
-    description="AI-powered sports commentary backend",
-    version="0.1.0",
-)
+app = FastAPI(title="HypeCast API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-    allow_credentials=True,
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(sessions_router, prefix="/api")
-app.include_router(detections_ws_router, prefix="/api")
-app.include_router(commentary_ws_router, prefix="/api")
 
 
 @app.get("/health")
-async def health_check() -> dict[str, str]:
+def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.on_event("startup")
-def _log_sprint1_ready() -> None:
-    logging.getLogger(__name__).info("[SPRINT 1] Foundation ready (API + CORS + session/commentary routes).")
+@app.post("/api/sessions", response_model=SessionCreateResponse)
+def create_session() -> SessionCreateResponse:
+    session_id = secrets.token_urlsafe(8)
+    join_url = f"/game/{session_id}"
+    sessions[session_id] = GameSession(id=session_id, join_url=join_url)
+    return SessionCreateResponse(session_id=session_id, join_url=join_url)
+
+
+@app.get("/api/sessions/{session_id}", response_model=SessionReadResponse)
+def read_session(session_id: str) -> SessionReadResponse:
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return SessionReadResponse(session_id=session.id, status=session.status)
+
+
+async def commentary_simulator(session_id: str) -> None:
+    lines = [
+        "And we are live from the park!",
+        "Great movement in transition, pressure building!",
+        "WHAT A PLAY! That's a highlight moment right there!",
+    ]
+    for line in lines:
+        publish_commentary(session_id, {"text": line})
+        await asyncio.sleep(1.5)
+
+
+@app.websocket("/api/ws/sessions/{session_id}/commentary")
+async def ws_commentary(websocket: WebSocket, session_id: str) -> None:
+    await websocket.accept()
+    if session_id not in sessions:
+        await websocket.send_json({"text": "Session not found."})
+        await websocket.close()
+        return
+
+    simulator_task = asyncio.create_task(commentary_simulator(session_id))
+    try:
+        async with subscribe_commentary(session_id) as queue:
+            while True:
+                while queue.empty():
+                    await asyncio.sleep(0.1)
+                await websocket.send_json(queue.get())
+    except WebSocketDisconnect:
+        pass
+    finally:
+        simulator_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await simulator_task

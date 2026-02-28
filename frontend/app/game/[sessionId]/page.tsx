@@ -1,8 +1,5 @@
-import { GameShell } from "@/src/components/GameShell";
+import { HypecastApp } from "@/src/components/HypecastApp";
 
-type Props = { params: Promise<{ sessionId: string }> };
-
-export default async function GameSessionPage({ params }: Props) {
-  const { sessionId } = await params;
-  return <GameShell spectatorSessionId={sessionId} />;
+export default function SessionPage() {
+  return <HypecastApp />;
 }
